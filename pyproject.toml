@@ -48,7 +48,6 @@ serve = [
   "uvicorn[standard]>=0.27",
   "python-dotenv>=1.0",
   "pydantic>=2.6",
-  "pydantic-settings>=2.2",
 ]
 
 dev = [
@@ -72,6 +71,18 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "W"]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# B008 flags function calls in argument defaults. Depends()/Header() in the
+# signature IS the FastAPI dependency-injection idiom, not a mistake.
+"api/*.py" = ["B008"]
+
+# doctor.py is deliberately written in an older Python dialect: it has to run on
+# whatever interpreter the box happens to have, in order to report that the
+# interpreter is too old. The UP (pyupgrade) rules would modernise it into
+# something that cannot parse there -- UP006/UP007 alone would require 3.9/3.10.
+# Exempting the whole group keeps a future `ruff --fix` from breaking it.
+"scripts/doctor.py" = ["UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

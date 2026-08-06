@@ -24,8 +24,8 @@ and the API image has no training dependencies (see tests/test_no_training_deps.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 
@@ -353,9 +353,15 @@ class PCANoveltyModel(NoveltyModel):
         if self.transform.std_ is not None:
             arrays["transform_std"] = self.transform.std_
 
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        np.savez_compressed(tmp, **arrays)
-        tmp.replace(path)
+        # np.savez_compressed appends ".npz" to any path that does not already
+        # end in it, so the temp name must keep that suffix or the rename below
+        # would chase a file numpy never wrote.
+        tmp = path.with_name(f".{path.name}.tmp.npz")
+        try:
+            np.savez_compressed(tmp, **arrays)
+            tmp.replace(path)
+        finally:
+            tmp.unlink(missing_ok=True)
         log.info("wrote %s (%s)", path, human_bytes(path.stat().st_size))
         return path
 

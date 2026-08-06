@@ -147,8 +147,12 @@ def write_results(records: list[RunRecord], out_dir: Path, *, started: float) ->
         "| " + " | ".join(md_columns) + " |",
         "|" + "|".join(["---"] * len(md_columns)) + "|",
     ]
+    def _cell(value) -> str:
+        # Not `value or "-"`: seed 0 is falsy and would render as a missing cell.
+        return "-" if value is None or value == "" else str(value)
+
     for row in rows:
-        lines.append("| " + " | ".join(str(row.get(c, "") or "-") for c in md_columns) + " |")
+        lines.append("| " + " | ".join(_cell(row.get(c, "")) for c in md_columns) + " |")
 
     if ok:
         lines += ["", "## Per-tier summary", "", "| tier | runs | mean ROC AUC | sd | best |", "|---|---|---|---|---|"]

@@ -19,8 +19,9 @@ Convention: `value` is the novelty score (higher = more worth transmitting).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Literal, Sequence
+from typing import Literal
 
 import numpy as np
 
@@ -53,6 +54,8 @@ class BudgetPlan:
     budget: BudgetSpec
     method: str
     upper_bound: float | None = None
+    #: "bits" | "cycles" | "both" | "neither". Which budget stopped the selector.
+    binding_constraint: str = "neither"
     meta: dict = field(default_factory=dict)
 
     @property
@@ -73,12 +76,6 @@ class BudgetPlan:
         if self.upper_bound is None or self.upper_bound <= 0:
             return None
         return float(max(0.0, 1.0 - self.total_value / self.upper_bound))
-
-    @property
-    def binding_constraint(self) -> str:
-        if self.bit_utilisation >= self.cycle_utilisation:
-            return "bits" if self.bit_utilisation > 0.98 else "neither"
-        return "cycles" if self.cycle_utilisation > 0.98 else "neither"
 
     def to_json(self) -> dict:
         return {
@@ -134,6 +131,34 @@ def _take_feasible(order: np.ndarray, v, b, c, budget: BudgetSpec) -> tuple[np.n
             used_c += ci
             total += v[i]
     return np.asarray(chosen, dtype=np.int64), total, used_b, used_c
+
+
+def _binding_constraint(v, b, c, budget: BudgetSpec, selected: np.ndarray, used_b: float, used_c: float) -> str:
+    """Which budget actually stopped the selector.
+
+    Utilisation alone cannot answer this. A cycle budget of 350 against items
+    costing 100 each is fully binding at 300 used -- 86% utilisation, and not
+    one more frame will fit. So ask the real question instead: of the frames
+    left behind, which budget was too small to admit them?
+    """
+    remaining = np.ones(v.size, dtype=bool)
+    if selected.size:
+        remaining[selected] = False
+    if not remaining.any():
+        return "neither"  # everything fit; neither budget was reached
+
+    headroom_bits = budget.bits - used_b
+    headroom_cycles = budget.cycles - used_c
+    blocked_by_bits = bool((b[remaining] > headroom_bits + 1e-9).any())
+    blocked_by_cycles = bool((c[remaining] > headroom_cycles + 1e-9).any())
+
+    if blocked_by_bits and blocked_by_cycles:
+        return "both"
+    if blocked_by_bits:
+        return "bits"
+    if blocked_by_cycles:
+        return "cycles"
+    return "neither"
 
 
 def _density_order(v, b, c, budget: BudgetSpec, weight: float) -> np.ndarray:
@@ -203,6 +228,7 @@ def select_two_budget(
         budget=budget,
         method=method,
         upper_bound=(fractional_upper_bound(v, b, c, budget) if compute_upper_bound else None),
+        binding_constraint=_binding_constraint(v, b, c, budget, selected, used_b, used_c),
         meta=meta,
     )
 

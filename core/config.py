@@ -10,8 +10,9 @@ identifies the run exactly, not just the file that started it.
 from __future__ import annotations
 
 import copy
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import yaml
 

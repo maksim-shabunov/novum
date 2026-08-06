@@ -15,9 +15,9 @@ from __future__ import annotations
 import csv
 import os
 from collections import defaultdict
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, fields
 from pathlib import Path
-from typing import Iterable, Sequence
 
 MANIFEST_COLUMNS: tuple[str, ...] = ("index", "split", "class", "sol", "source_filename")
 

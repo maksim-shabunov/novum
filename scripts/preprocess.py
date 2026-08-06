@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import sys
 import time
@@ -55,8 +56,13 @@ from core.dataset import (
 from core.filenames import parse_sol
 from core.logging_utils import Progress, get_logger, human_bytes, setup_logging
 from core.manifest import ManifestRow, write_manifest
+from core.provenance import peak_rss_bytes
 
 log = get_logger("novum.preprocess")
+
+#: Preprocessing is O(1) in dataset size. If peak RSS ever crosses this, the
+#: streaming contract has regressed -- see StreamingArrayWriter.
+RSS_BUDGET_BYTES = 500 * 1024 * 1024
 
 #: Raw directory name -> the split(s) it produces.
 TYPICAL_SPLITS: dict[str, str] = {
@@ -283,13 +289,135 @@ def _warn_on_cross_split_overlap(plans: list[SplitPlan]) -> dict[str, int]:
 # ---------------------------------------------------------------------------
 # Materialisation
 # ---------------------------------------------------------------------------
+#: Frames copied per block when trimming a short split. 64 frames = ~6 MiB.
+_TRIM_BLOCK_FRAMES = 64
+
+
+class StreamingArrayWriter:
+    """Append frames to a preallocated .npy in constant memory.
+
+    Writing through `np.lib.format.open_memmap` is the obvious implementation
+    and the wrong one here: every assignment dirties a page, and the kernel
+    keeps those pages resident until writeback. Building train_typical that way
+    peaked at 914 MiB RSS for an 872 MiB array -- the whole output, held in RAM.
+    On the 2 GB server this project targets, that is the difference between
+    working and being OOM-killed.
+
+    So the file is created (header + preallocation) with open_memmap, the
+    mapping is dropped immediately, and frames are then written sequentially
+    through an ordinary buffered file handle. Peak RSS becomes O(1) in the
+    number of frames: one 192 KB source frame and a 1 MiB write buffer.
+    """
+
+    def __init__(
+        self,
+        path: Path,
+        n_frames: int,
+        frame_shape: tuple[int, ...] = FRAME_SHAPE,
+        dtype: type = np.float32,
+    ) -> None:
+        self.path = Path(path)
+        self.n_frames = int(n_frames)
+        self.frame_shape = tuple(frame_shape)
+        self.dtype = np.dtype(dtype)
+        self.written = 0
+        self._fh = None
+
+        # Create the header and preallocate, then drop the mapping at once.
+        # Mapping a file does not make its pages resident; only touching them
+        # does, and we never touch one.
+        mm = np.lib.format.open_memmap(
+            self.path, mode="w+", dtype=self.dtype, shape=(self.n_frames, *self.frame_shape)
+        )
+        self.data_offset = int(mm.offset)
+        del mm
+
+    @property
+    def frame_nbytes(self) -> int:
+        return int(np.prod(self.frame_shape)) * self.dtype.itemsize
+
+    def __enter__(self) -> StreamingArrayWriter:
+        self._fh = open(self.path, "r+b", buffering=1024 * 1024)
+        self._fh.seek(self.data_offset)
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+    def append(self, frame: np.ndarray) -> None:
+        if self._fh is None:
+            raise RuntimeError("StreamingArrayWriter used outside its context manager")
+        if self.written >= self.n_frames:
+            raise RuntimeError(
+                f"tried to write frame {self.written} into an array sized {self.n_frames}"
+            )
+        # tofile writes straight through the handle, with no intermediate bytes
+        # object. ascontiguousarray is a no-op when the source is already C-order
+        # float32, and a single-frame copy otherwise.
+        np.ascontiguousarray(frame, dtype=self.dtype).tofile(self._fh)
+        self.written += 1
+
+    def close(self) -> None:
+        if self._fh is not None:
+            self._fh.flush()
+            os.fsync(self._fh.fileno())
+            self._fh.close()
+            self._fh = None
+
+    def finalize(self) -> Path:
+        """Close the file, shrinking it if fewer frames arrived than planned."""
+        self.close()
+        if self.written == self.n_frames:
+            return self.path
+        return self._trim_to(self.written)
+
+    def _trim_to(self, count: int) -> Path:
+        """Rewrite the array with a smaller leading dimension, block by block.
+
+        The .npy header encodes the shape, and a shorter shape can encode to a
+        different header length, so the data cannot simply be truncated in
+        place. Copying is done with plain file IO -- no mmap -- to keep the
+        memory guarantee intact even on this rare path.
+        """
+        trimmed = self.path.with_suffix(self.path.suffix + ".trim")
+        trimmed.unlink(missing_ok=True)
+
+        mm = np.lib.format.open_memmap(
+            trimmed, mode="w+", dtype=self.dtype, shape=(count, *self.frame_shape)
+        )
+        dest_offset = int(mm.offset)
+        del mm
+
+        block = _TRIM_BLOCK_FRAMES * self.frame_nbytes
+        remaining = count * self.frame_nbytes
+        with open(self.path, "rb") as src, open(trimmed, "r+b") as dst:
+            src.seek(self.data_offset)
+            dst.seek(dest_offset)
+            while remaining > 0:
+                chunk = src.read(min(block, remaining))
+                if not chunk:
+                    raise OSError(f"unexpected end of {self.path} while trimming")
+                dst.write(chunk)
+                remaining -= len(chunk)
+            dst.flush()
+            os.fsync(dst.fileno())
+
+        self.path.unlink(missing_ok=True)
+        trimmed.replace(self.path)
+        return self.path
+
+
 def build_split(
     plan: SplitPlan,
     out_dir: Path,
     *,
     skip_bad: bool = False,
 ) -> tuple[Path, list[ManifestRow], int]:
-    """Write one split's float32 array. Returns (path, manifest rows, unparsed sols)."""
+    """Write one split's float32 array. Returns (path, manifest rows, unparsed sols).
+
+    Memory is O(1) in the number of frames: exactly one source frame is
+    resident at a time. See StreamingArrayWriter.
+    """
     final_path = out_dir / f"{plan.name}.npy"
     tmp_path = out_dir / f"{plan.name}.npy.tmp"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -299,16 +427,13 @@ def build_split(
     unparsed: list[str] = []
     written = 0
 
-    array = np.lib.format.open_memmap(
-        tmp_path,
-        mode="w+",
-        dtype=np.float32,
-        shape=(plan.n, *FRAME_SHAPE),
-    )
+    writer = StreamingArrayWriter(tmp_path, plan.n)
     try:
-        with Progress(plan.n, f"building {plan.name}", unit="frames", logger=log) as bar:
+        with writer, Progress(plan.n, f"building {plan.name}", unit="frames", logger=log) as bar:
             for sample in plan.samples:
                 try:
+                    # One frame at a time. Never the whole split, never a list
+                    # of frames -- that is the entire memory contract here.
                     frame = np.load(sample.path)
                 except (OSError, ValueError) as exc:
                     if skip_bad:
@@ -328,7 +453,8 @@ def build_split(
                         continue
                     raise ValueError(msg)
 
-                array[written] = frame.astype(np.float32, copy=False)
+                writer.append(frame)
+                del frame  # do not keep a reference alive across the loop
 
                 sol = parse_sol(sample.path.name)
                 if sol is None:
@@ -346,23 +472,13 @@ def build_split(
                 bar.advance()
 
         if written != plan.n:
-            # Some frames were skipped; shrink the array to what we actually wrote.
             log.warning("%s: wrote %d of %d planned frames", plan.name, written, plan.n)
-            array.flush()
-            del array
-            trimmed = np.load(tmp_path, mmap_mode="r")[:written]
-            resized = out_dir / f"{plan.name}.npy.tmp2"
-            np.save(resized, np.asarray(trimmed))
-            tmp_path.unlink(missing_ok=True)
-            resized.replace(tmp_path)
-        else:
-            array.flush()
-            del array
-
+        writer.finalize()
         tmp_path.replace(final_path)
     except BaseException:
+        writer.close()
         tmp_path.unlink(missing_ok=True)
-        (out_dir / f"{plan.name}.npy.tmp2").unlink(missing_ok=True)
+        tmp_path.with_suffix(tmp_path.suffix + ".trim").unlink(missing_ok=True)
         raise
 
     if unparsed:
@@ -565,6 +681,20 @@ def main(argv: list[str] | None = None) -> int:
     free = shutil.disk_usage(out_dir).free
     if free < total_bytes:
         log.warning("only %s free on this volume", human_bytes(free))
+
+    # Preprocessing is O(1) in dataset size by construction. Reporting the
+    # number every run makes a regression visible immediately rather than at
+    # 3am on a 2 GB box, and `built` guards against reporting a no-op run.
+    peak = peak_rss_bytes()
+    if built:
+        log.info("peak RSS %s (budget %s)", human_bytes(peak), human_bytes(RSS_BUDGET_BYTES))
+        if peak > RSS_BUDGET_BYTES:
+            log.warning(
+                "peak RSS %s exceeded the %s streaming budget. Preprocessing is supposed to "
+                "hold one frame at a time; this suggests the streaming write path regressed.",
+                human_bytes(peak),
+                human_bytes(RSS_BUDGET_BYTES),
+            )
 
     log.info("next: make train TIER=rad750")
     return 0

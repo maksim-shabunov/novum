@@ -27,9 +27,9 @@ hard assertion behind that refusal.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator, Sequence
 
 import numpy as np
 
@@ -224,7 +224,10 @@ def iter_chunks(
     chunk_size = max(1, int(chunk_size))
     for start in range(0, n, chunk_size):
         stop = min(start + chunk_size, n)
-        yield np.asarray(array[start:stop], dtype=np.float32)
+        # np.array(..., copy=True), not np.asarray: asarray on a memmap slice of
+        # matching dtype hands back the read-only view itself, and the first
+        # in-place op downstream raises "output array is read-only".
+        yield np.array(array[start:stop], dtype=np.float32, copy=True)
 
 
 class ChunkedArray:
