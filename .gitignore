@@ -1,0 +1,43 @@
+# ---------------------------------------------------------------------------
+# Raw and derived data are NEVER committed. Trained artifacts ARE (kilobytes).
+# ---------------------------------------------------------------------------
+data/*
+runs/*
+
+# ...but keep the directory skeleton so a fresh clone has somewhere to write.
+!data/.gitkeep
+!runs/.gitkeep
+
+# Artifacts are intentionally tracked so the demo runs with no training step.
+# Guard against accidentally committing a heavyweight checkpoint.
+artifacts/**/*.pt
+artifacts/**/*.pth
+artifacts/**/*.onnx
+artifacts/**/*.ckpt
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Downloads in flight
+*.part
+*.tmp
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

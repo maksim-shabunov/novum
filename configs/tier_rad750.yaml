@@ -1,0 +1,76 @@
+# =============================================================================
+# RAD750 tier -- the flight-heritage floor.
+#
+# A BAE RAD750 runs at ~133-200 MHz with no vector unit and no FPU worth the
+# name. Curiosity and Perseverance both fly one. Anything that runs here runs
+# anywhere, so this tier is the honest baseline: if a conv autoencoder cannot
+# beat linear PCA by enough to justify three orders of magnitude more compute,
+# it does not belong onboard.
+#
+# THIS IS THE ONLY TIER IMPLEMENTED END TO END.
+#   make train TIER=rad750 && make eval
+# =============================================================================
+
+tier: rad750
+description: >
+  PCA reconstruction-error novelty detection at RAD750 scale. Scoring one frame
+  is a single k x D matrix-vector product against the principal subspace of
+  previously-seen typical terrain.
+
+seed: 0
+
+model:
+  type: pca
+
+  # Size of the principal subspace. 64 components over D=6144 features keeps
+  # the artifact around 1.5 MB and inference around 0.8 MFLOP.
+  n_components: 64
+
+  # Novelty score. recon_l2 is the residual energy the subspace cannot explain:
+  #   recon_l2          Euclidean norm of the reconstruction residual (default)
+  #   recon_mse         residual energy per feature
+  #   recon_normalized  residual relative to the frame's own energy; more robust
+  #                     to illumination changes, less sensitive to faint targets
+  #   mahalanobis       distance *within* the subspace; catches "ordinary rock
+  #                     in an extraordinary configuration" rather than texture
+  score: recon_l2
+
+  # Randomized SVD parameters (Halko et al. 2011). Oversampling stabilises the
+  # tail components; power iterations sharpen the spectrum when it decays
+  # slowly, which it does on natural imagery.
+  oversamples: 16
+  power_iterations: 2
+
+transform:
+  scale: 255.0        # raw Mastcam DN are integers in 0..255
+  downsample: 2       # block-mean 64x64 -> 32x32, so D = 32*32*6 = 6144
+  standardize: per_band
+  frame_shape: [64, 64, 6]
+
+data:
+  train_split: train_typical
+  max_train_samples: null   # null = all 9302 frames
+  chunk_size: 512
+
+eval:
+  typical_split: test_typical
+  # MUST stay test_novel_all. test_novel_byclass has one row per (frame, label)
+  # and double counts the five multi-label frames. See core/dataset.py.
+  novel_split: test_novel_all
+  k_values: [10, 25, 50, 100]
+  per_class: true
+
+compute:
+  reference_processor: "BAE RAD750 @ 200 MHz, no SIMD (~200 MIPS)"
+  # A software float path on a rad-hard core costs several cycles per FLOP.
+  cycles_per_flop: 3.0
+  # ~0.1 s of the flight processor per frame. Science autonomy is a guest on
+  # this CPU; driving, thermal and comms are the tenants.
+  budget_cycles_per_frame: 20000000
+
+downlink:
+  bits_per_sample: 8
+  compression_ratio: 4.0      # conservative stand-in for ICER on Mastcam tiles
+  # 8 Mbit of a relay pass allocated to novelty triage: about 162 frames at
+  # 49,152 bits each. The rover will have captured far more than that.
+  budget_bits_per_window: 8000000

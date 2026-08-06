@@ -1,0 +1,79 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "novum"
+version = "0.1.0"
+description = "Onboard science data triage for a planetary rover: novelty scoring under a downlink and a compute budget."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "NOVUM contributors" }]
+keywords = ["novelty-detection", "mars", "mastcam", "onboard-autonomy", "downlink"]
+
+# ---------------------------------------------------------------------------
+# Base dependencies.
+#
+# ARCHITECTURAL RULE: this list is what `core/` and `api/` are allowed to use.
+# It must never grow a training dependency (torch, scikit-learn, scipy, ...).
+# `core/` is pure numpy so that the serving image can score frames without ever
+# linking a training stack. See tests/test_no_training_deps.py, which fails the
+# build if this rule is broken.
+# ---------------------------------------------------------------------------
+dependencies = [
+  "numpy>=1.24",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+# Manifest/table IO. Needed by preprocess.py and sweep.py, not by the API.
+data = [
+  "pandas>=2.0",
+  "pyarrow>=14.0",
+]
+
+# Training only. NEVER installed into the API image.
+# NOTE: install torch from the CPU wheel index (see Makefile / Dockerfile.train)
+# so no CUDA runtime is pulled in. NOVUM is CPU-only by design.
+train = [
+  "novum[data]",
+  "torch>=2.2",
+  "scikit-learn>=1.3",
+]
+
+# Serving only. Deliberately excludes every training dependency.
+serve = [
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.27",
+  "python-dotenv>=1.0",
+  "pydantic>=2.6",
+  "pydantic-settings>=2.2",
+]
+
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.4",
+]
+
+[project.urls]
+Dataset = "https://doi.org/10.5281/zenodo.3732485"
+
+[tool.setuptools]
+packages = ["core", "core.models", "scripts", "api", "sim"]
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml", "*.yml"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "W"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["error::DeprecationWarning:core.*"]

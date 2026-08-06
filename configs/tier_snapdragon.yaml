@@ -1,0 +1,59 @@
+# =============================================================================
+# Snapdragon tier -- larger convolutional autoencoder.
+#
+# STATUS: NOT IMPLEMENTED. This config is valid and parses; training it raises
+# NotImplementedError from core/models/conv_ae.py.
+#
+# Represents a ~5-10 W mobile SoC. Ingenuity flew a Snapdragon 801, so this is
+# not a fantasy tier -- it is what a modern rover could plausibly carry as a
+# science coprocessor, and it is where the compute budget stops binding and the
+# downlink budget starts.
+# =============================================================================
+
+tier: snapdragon
+description: >
+  Larger conv autoencoder (32 channels, depth 3, latent 128) for a ~5-10 W SoC.
+  NOT IMPLEMENTED.
+
+seed: 0
+
+model:
+  type: conv_ae_snapdragon
+  channels: 32
+  depth: 3
+  latent_dim: 128
+
+  epochs: 60
+  batch_size: 128
+  learning_rate: 0.0005
+  weight_decay: 0.00001
+  device: cpu          # NOVUM is CPU-only by contract. Do not set to cuda.
+  num_workers: 4
+  early_stopping_patience: 8
+
+transform:
+  scale: 255.0
+  downsample: 1
+  standardize: per_band
+  frame_shape: [64, 64, 6]
+
+data:
+  train_split: train_typical
+  max_train_samples: null
+  chunk_size: 256
+
+eval:
+  typical_split: test_typical
+  novel_split: test_novel_all
+  k_values: [10, 25, 50, 100]
+  per_class: true
+
+compute:
+  reference_processor: "Qualcomm Snapdragon class SoC, ~5-10 W"
+  cycles_per_flop: 0.1
+  budget_cycles_per_frame: 2000000000
+
+downlink:
+  bits_per_sample: 8
+  compression_ratio: 4.0
+  budget_bits_per_window: 8000000
