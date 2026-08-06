@@ -3,15 +3,15 @@
   "name": "rad750",
   "tier": "rad750",
   "model_type": "pca",
-  "config_hash": "24b4080d6333282e5f568646ceff561e542709fb7a88f0b426602e0d742e5907",
-  "content_sha256": "ba3b2fab27a24bf66f27b37e71a9ce0e10c66a4cdfdaf765070bb2f20c13ad75",
+  "config_hash": "cfb40ed216f4a7a83316535603b4a1549535ae9c6c47aa41d77e4dd284ac526f",
+  "content_sha256": "8f22bd271ac08e21c2b9a001ad1a52b351594b2b6b2d0b5baf93b4d8ff83da06",
   "artifact": "artifacts/rad750.npz",
-  "git_commit": "2368fdb7181985bb1efe866765d534967d8c3afe",
+  "git_commit": "89e959ab7cb2839d2273c32344179beba93e9097",
   "git_branch": "main",
   "git_dirty": true,
   "kind": "training",
-  "created_utc": "2026-08-06T10:07:56Z",
-  "wall_clock_seconds": 15.478,
+  "created_utc": "2026-08-06T10:54:00Z",
+  "wall_clock_seconds": 50.547,
   "param_count": 399372,
   "flops_per_inference": 866432,
   "fits_compute_budget": true,
@@ -23,19 +23,19 @@
     "fits_compute_budget": true,
     "budget_utilisation": 0.1299648
   },
-  "peak_rss_bytes": 1620180992,
-  "peak_rss_mib": 1545.1,
+  "peak_rss_bytes": 1457029120,
+  "peak_rss_mib": 1389.5,
   "n_train_samples": 9302,
   "seed": 0,
   "environment": {
-    "python": "3.13.12",
-    "numpy": "2.5.1",
-    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
-    "machine": "arm64",
-    "cpu_count": 14,
+    "python": "3.12.3",
+    "numpy": "2.2.6",
+    "platform": "Linux-6.8.0-100-generic-x86_64-with-glibc2.39",
+    "machine": "x86_64",
+    "cpu_count": 20,
     "device": "cpu",
-    "blas_backend": "accelerate",
-    "blas_threads": 14
+    "blas_backend": "openblas",
+    "blas_threads": 20
   },
   "config": {
     "tier": "rad750",
@@ -85,10 +85,10 @@
       "compression_ratio": 4.0,
       "budget_bits_per_window": 8000000
     },
-    "_source": "/Users/maksim/Desktop/novum/configs/tier_rad750.yaml"
+    "_source": "/home/maksim/novum/configs/tier_rad750.yaml"
   },
   "extra": {
     "train_split": "train_typical",
-    "artifact_bytes": 1477761
+    "artifact_bytes": 1477762
   }
 }

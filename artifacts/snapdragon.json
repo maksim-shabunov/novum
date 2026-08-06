@@ -3,15 +3,15 @@
   "name": "snapdragon",
   "tier": "snapdragon",
   "model_type": "conv_ae_snapdragon",
-  "config_hash": "1e26e2a863f78dc6e4ee508d1465af129c2da0be1dcd22f602cdde948b9d6e51",
-  "content_sha256": "7180b13811fd5f2a6db1d064915099be2c5b04d6da0840bc3d7a66a3871b20db",
+  "config_hash": "18ae461ec779d447ae9d45516b14a99318584bd5e6183000fe276864f2d96526",
+  "content_sha256": "f1e13711e8325dcfc78bc922d171e29b878be74784061a4fefb345650a0df125",
   "artifact": "artifacts/snapdragon.npz",
-  "git_commit": "2368fdb7181985bb1efe866765d534967d8c3afe",
+  "git_commit": "89e959ab7cb2839d2273c32344179beba93e9097",
   "git_branch": "main",
   "git_dirty": true,
   "kind": "training",
-  "created_utc": "2026-08-06T10:24:31Z",
-  "wall_clock_seconds": 530.374,
+  "created_utc": "2026-08-06T11:09:57Z",
+  "wall_clock_seconds": 481.539,
   "param_count": 2294871,
   "flops_per_inference": 49209344,
   "fits_compute_budget": true,
@@ -23,30 +23,30 @@
     "fits_compute_budget": true,
     "budget_utilisation": 0.0024604672
   },
-  "peak_rss_bytes": 1908801536,
-  "peak_rss_mib": 1820.4,
+  "peak_rss_bytes": 1886744576,
+  "peak_rss_mib": 1799.3,
   "n_train_samples": 9302,
   "seed": 0,
   "training": {
     "epochs_run": 38,
     "best_epoch": 32,
-    "best_val_loss": 0.0972576049613861,
-    "final_train_loss": 0.0855913901586631,
+    "best_val_loss": 0.09681757486113107,
+    "final_train_loss": 0.0855116032366726,
     "early_stopped": true,
     "val_source": "validation_typical",
     "n_train_used": 9302,
-    "train_seconds": 529.04
+    "train_seconds": 477.77
   },
   "environment": {
-    "python": "3.13.12",
-    "numpy": "2.5.1",
-    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
-    "machine": "arm64",
-    "cpu_count": 14,
+    "python": "3.12.3",
+    "numpy": "2.2.6",
+    "platform": "Linux-6.8.0-100-generic-x86_64-with-glibc2.39",
+    "machine": "x86_64",
+    "cpu_count": 20,
     "device": "cpu",
-    "blas_backend": "accelerate",
-    "blas_threads": 14,
-    "torch": "2.9.1",
+    "blas_backend": "openblas",
+    "blas_threads": 20,
+    "torch": "2.9.1+cpu",
     "torch_threads": 10
   },
   "config": {
@@ -105,10 +105,10 @@
       "compression_ratio": 4.0,
       "budget_bits_per_window": 8000000
     },
-    "_source": "/Users/maksim/Desktop/novum/configs/tier_snapdragon.yaml"
+    "_source": "/home/maksim/novum/configs/tier_snapdragon.yaml"
   },
   "extra": {
     "train_split": "train_typical",
-    "artifact_bytes": 8541766
+    "artifact_bytes": 8541743
   }
 }
