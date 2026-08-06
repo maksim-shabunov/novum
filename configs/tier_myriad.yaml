@@ -1,39 +1,55 @@
 # =============================================================================
-# Myriad X tier -- small convolutional autoencoder.
+# Myriad tier -- small convolutional autoencoder.
 #
-# STATUS: NOT IMPLEMENTED. This config is valid and parses; training it raises
-# NotImplementedError from core/models/conv_ae.py. `make sweep` records the
-# tier as `not_implemented` and continues.
+# Sized for the Intel Movidius Myriad 2 VPU, the accelerator ESA actually flew
+# on Phi-Sat-1 (2020) -- the first AI inference hardware on an ESA mission.
+# ~1 W, 12 SHAVE VLIW cores, and the first tier where a learned nonlinear
+# model is plausible onboard at all.
 #
-# Represents a 1-2 W vision accelerator (Intel Myriad X class), the kind of
-# part that has flown as a coprocessor rather than a flight computer.
+# The question this tier answers: does a small learned model beat linear PCA
+# by enough to justify ~11x the inference FLOPs -- and in particular, does it
+# see the rover-made disturbances (drt, dump-pile) that PCA is blind to?
+#
+#   make train TIER=myriad && make eval ARTIFACT=artifacts/myriad.npz
+#
+# Trains on CPU in well under 15 minutes on a 20-core x86 box (measured ~2-4
+# minutes; see the sidecar's wall_clock_seconds for the exact figure).
 # =============================================================================
 
 tier: myriad
 description: >
-  Small conv autoencoder (16 channels, depth 2, latent 32) for a ~1-2 W VPU.
-  Reconstruction MSE over typical terrain is the novelty score. NOT IMPLEMENTED.
+  Small conv autoencoder (16 base channels, depth 2, dense latent 32) for a
+  Myriad 2 class VPU. Novelty score is per-frame reconstruction MSE in the
+  same standardized space the RAD750 tier scores in, so the comparison is fair.
 
 seed: 0
 
 model:
   type: conv_ae_myriad
-  channels: 16
-  depth: 2
-  latent_dim: 32
+  channels: 16          # base width; doubles per encoder stage -> [16, 32]
+  depth: 2              # 64x64 -> 32x32 -> 16x16 before the dense bottleneck
+  latent_dim: 32        # the compression that makes novelty visible
 
-  # Training hyperparameters, read once the tier is implemented.
-  epochs: 30
-  batch_size: 64
+  # Training hyperparameters. The loader is in-process and seeded (no worker
+  # pool), so a given seed reproduces batch order exactly.
+  epochs: 40
+  batch_size: 128
   learning_rate: 0.001
   weight_decay: 0.0
-  device: cpu          # NOVUM is CPU-only by contract. Do not set to cuda.
-  num_workers: 2
+  device: cpu           # NOVUM is CPU-only by contract. Do not set to cuda.
+  num_workers: 0        # reserved; batching is in-process for determinism
   early_stopping_patience: 5
+
+  # Early stopping watches reconstruction loss on validation_typical -- held
+  # out by the dataset authors, different sols than train.
+  val_split: validation_typical
+
+  # recon_mse | recon_l2 (identical ranking; MSE is the conventional report)
+  score: recon_mse
 
 transform:
   scale: 255.0
-  downsample: 1        # convolutions consume the full 64x64 frame
+  downsample: 1         # convolutions consume the full 64x64 frame
   standardize: per_band
   frame_shape: [64, 64, 6]
 
@@ -44,13 +60,19 @@ data:
 
 eval:
   typical_split: test_typical
+  # MUST stay test_novel_all. test_novel_byclass double counts multi-label
+  # frames. See core/dataset.py.
   novel_split: test_novel_all
-  k_values: [10, 25, 50, 100]
+  # 162 = one 8 Mbit downlink window at 49,152 bits/frame: the operationally
+  # meaningful k. See scripts/evaluate.py.
+  k_values: [10, 25, 50, 100, 162]
   per_class: true
 
 compute:
-  reference_processor: "Intel Myriad X VPU, ~1-2 W"
-  cycles_per_flop: 0.25        # SIMD/VLIW: several MACs retire per cycle
+  reference_processor: "Intel Movidius Myriad 2 VPU (Phi-Sat-1), ~1 W"
+  # VLIW SIMD across 12 SHAVE cores: several MACs retire per clock.
+  cycles_per_flop: 0.25
+  # ~0.17 s per frame at 600 MHz -- generous, but the VPU exists to run vision.
   budget_cycles_per_frame: 100000000
 
 downlink:

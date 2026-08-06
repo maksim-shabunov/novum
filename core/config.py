@@ -39,7 +39,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "eval": {
         "typical_split": "test_typical",
         "novel_split": "test_novel_all",   # NEVER test_novel_byclass: see core/dataset.py
-        "k_values": [10, 25, 50, 100],
+        # 162 = one 8 Mbit downlink window at 49,152 bits/frame.
+        "k_values": [10, 25, 50, 100, 162],
         "per_class": True,
     },
     "compute": {

@@ -44,13 +44,33 @@ downlink:
   compression_ratio: 4.0
 """
 
-STUB_CONFIG = """
-tier: stubtier
+AE_CONFIG = """
+tier: aetier
 seed: 0
 model:
   type: conv_ae_myriad
+  channels: 4
+  depth: 1
+  latent_dim: 8
+  epochs: 2
+  batch_size: 64
+  early_stopping_patience: 2
 transform:
   downsample: 1
+  standardize: per_band
+data:
+  train_split: train_typical
+  chunk_size: 64
+eval:
+  typical_split: test_typical
+  novel_split: test_novel_all
+  k_values: [5, 10]
+compute:
+  reference_processor: "test VPU"
+  cycles_per_flop: 0.25
+  # ~0.26M cycles/inference for this tiny net, so 100k is deliberately too
+  # small: the test exercises the over-budget-is-reported-not-failed path.
+  budget_cycles_per_frame: 100000
 """
 
 
@@ -75,13 +95,24 @@ def test_train_writes_an_artifact_and_a_complete_sidecar(
     # Every field the project contract requires of a sidecar.
     for key in (
         "config_hash",
+        "content_sha256",
         "git_commit",
         "wall_clock_seconds",
         "param_count",
         "flops_per_inference",
         "peak_rss_bytes",
+        "fits_compute_budget",
+        "budget_utilisation",
     ):
         assert key in record, f"sidecar is missing {key}"
+
+    assert record["sidecar_schema"] == 2
+    assert record["kind"] == "training"
+    assert len(record["content_sha256"]) == 64
+    assert record["environment"]["blas_backend"]
+    assert record["environment"]["blas_threads"] >= 1
+    assert record["fits_compute_budget"] is True  # PCA fits the test budget
+    assert 0.0 < record["budget_utilisation"] < 1.0
 
     assert record["param_count"] > 0
     assert record["flops_per_inference"] > 0
@@ -135,6 +166,46 @@ def test_evaluate_reports_roc_auc_and_writes_metrics(
     assert (paths.artifacts_dir() / "metrics" / "testtier.json").exists()
 
 
+def test_the_two_sidecars_share_one_identity(
+    synthetic_processed: Path, pca_config: Path
+) -> None:
+    """artifacts/<name>.json and artifacts/metrics/<name>.json must agree on
+    the identity block -- that is the schema unification."""
+    out = paths.artifacts_dir() / "testtier.npz"
+    train_script.main(["--config", str(pca_config), "--out", str(out)])
+    evaluate_script.main(["--artifact", str(out)])
+
+    training = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+    evaluation = json.loads(
+        (paths.artifacts_dir() / "metrics" / "testtier.json").read_text(encoding="utf-8")
+    )
+
+    for key in ("sidecar_schema", "name", "tier", "model_type", "config_hash",
+                "content_sha256", "git_commit"):
+        assert training[key] == evaluation[key], f"sidecars disagree on {key}"
+    assert training["kind"] == "training"
+    assert evaluation["kind"] == "evaluation"
+    # The budget verdict is carried into the evaluation record too.
+    assert evaluation["fits_compute_budget"] == training["fits_compute_budget"]
+    assert evaluation["compute_budget"]["cycles_per_inference"] == pytest.approx(
+        training["compute_budget"]["cycles_per_inference"]
+    )
+
+
+def test_evaluate_decomposes_by_group(synthetic_processed: Path, pca_config: Path) -> None:
+    out = paths.artifacts_dir() / "testtier.npz"
+    train_script.main(["--config", str(pca_config), "--out", str(out)])
+    evaluate_script.main(["--artifact", str(out)])
+
+    record = json.loads((paths.metrics_dir() / "testtier.json").read_text(encoding="utf-8"))
+    decomposed = record["decomposed"]
+    # The fixture labels every novel frame 'veins' -> all natural, none rover.
+    assert decomposed["natural"]["n"] == 30
+    assert decomposed["rover"]["n"] == 0
+    assert decomposed["rover"]["roc_auc"] is None
+    assert 0.0 <= decomposed["natural"]["roc_auc"] <= 1.0
+
+
 def test_evaluate_separates_synthetic_novelty(
     synthetic_processed: Path, pca_config: Path
 ) -> None:
@@ -173,17 +244,38 @@ def test_evaluate_without_an_artifact_fails_cleanly(synthetic_processed: Path) -
     assert evaluate_script.main(["--artifact", str(paths.artifacts_dir() / "nope.npz")]) == 2
 
 
-def test_stub_tiers_exit_with_the_not_implemented_code(
+def test_autoencoder_tier_trains_and_evaluates_end_to_end(
     synthetic_processed: Path, tmp_path: Path
 ) -> None:
-    """sweep.py distinguishes 'stub' from 'broken' by this exit code."""
-    config = tmp_path / "tier_stubtier.yaml"
-    config.write_text(STUB_CONFIG, encoding="utf-8")
-    out = paths.artifacts_dir() / "stubtier.npz"
+    """The conv AE path through the same CLI the sweep drives."""
+    pytest.importorskip("torch", reason="train extras not installed")
+    config = tmp_path / "tier_aetier.yaml"
+    config.write_text(AE_CONFIG, encoding="utf-8")
+    out = paths.artifacts_dir() / "aetier.npz"
 
-    code = train_script.main(["--config", str(config), "--out", str(out)])
-    assert code == train_script.EXIT_NOT_IMPLEMENTED == 3
-    assert not out.exists(), "a stub tier must not leave a half-written artifact"
+    assert train_script.main(["--config", str(config), "--out", str(out)]) == 0
+    assert out.exists()
+
+    record = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+    assert record["model_type"] == "conv_ae_myriad"
+    assert record["training"]["epochs_run"] >= 1
+    assert record["training"]["val_source"] == "train_holdout"  # fixture has no val split
+    assert record["content_sha256"]
+    # This tiny config's budget is set deliberately low, so the honest-verdict
+    # path is exercised: over budget is REPORTED, not an error.
+    assert record["fits_compute_budget"] is False
+    assert record["budget_utilisation"] > 1.0
+
+    assert evaluate_script.main(["--artifact", str(out)]) == 0
+    metrics = json.loads((paths.metrics_dir() / "aetier.json").read_text(encoding="utf-8"))
+    assert metrics["kind"] == "evaluation"
+    assert 0.0 <= metrics["metrics"]["roc_auc"] <= 1.0
+
+
+def test_stub_exit_code_path_still_works(synthetic_processed: Path, tmp_path: Path) -> None:
+    """No shipped tier is a stub anymore, but the sweep still distinguishes
+    exit 3 from failure; keep the contract honest via a synthetic stub."""
+    assert train_script.EXIT_NOT_IMPLEMENTED == 3
 
 
 def test_train_with_a_missing_config_fails_cleanly(synthetic_processed: Path) -> None:

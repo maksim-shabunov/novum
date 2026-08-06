@@ -166,3 +166,57 @@ def test_scoring_before_fitting_raises() -> None:
 def test_explained_variance_is_a_sane_fraction(rng) -> None:
     model = _fit(make_typical(rng, 200), n_components=10)
     assert 0.0 < model.explained_variance_ratio_sum <= 1.0
+
+
+def test_component_signs_are_canonical(rng) -> None:
+    """svd_flip: the largest-|.| element of every component is positive.
+
+    An SVD is defined only up to per-vector sign, and different BLAS backends
+    pick different signs. Scores are sign-invariant, but artifact bytes are
+    not -- without canonicalisation, content_sha256 could never match across
+    macOS/Accelerate and Linux/OpenBLAS even for numerically identical models.
+    """
+    model = _fit(make_typical(rng, 150), n_components=8)
+    pivots = np.argmax(np.abs(model.components_), axis=1)
+    pivot_values = model.components_[np.arange(len(pivots)), pivots]
+    assert (pivot_values > 0).all()
+
+
+def test_flipping_a_component_does_not_change_scores(rng) -> None:
+    """The invariance svd_flip relies on, checked for every score mode."""
+    typical = make_typical(rng, 150)
+    probe = make_novel(rng, 20)
+    for mode in ("recon_l2", "recon_mse", "recon_normalized", "mahalanobis"):
+        model = _fit(typical, n_components=5, score_mode=mode)
+        expected = model.score(probe)
+        model.components_ = model.components_.copy()
+        model.components_[2] *= -1.0  # un-canonicalise one component
+        np.testing.assert_allclose(model.score(probe), expected, rtol=1e-6, atol=1e-9)
+
+
+def test_content_sha256_tracks_the_weights(rng, tmp_path) -> None:
+    model = _fit(make_typical(rng, 100), n_components=4)
+    original = model.content_sha256()
+
+    # Stable across save/load.
+    reloaded = load_model(model.save(tmp_path / "a.npz"))
+    assert reloaded.content_sha256() == original
+
+    # And sensitive to the weights actually changing.
+    reloaded.components_ = reloaded.components_.copy()
+    reloaded.components_[0, 0] += 1e-3
+    assert reloaded.content_sha256() != original
+
+
+def test_content_sha256_is_container_independent(rng, tmp_path) -> None:
+    """Two saves of the same model may differ as files; the content hash may not."""
+    import time as _time
+
+    model = _fit(make_typical(rng, 80), n_components=3)
+    p1 = model.save(tmp_path / "one.npz")
+    _time.sleep(1.1)  # zip stores mtimes at 2 s resolution; force them apart
+    p2 = model.save(tmp_path / "two.npz")
+
+    from core.models.registry import load_model as _load
+
+    assert _load(p1).content_sha256() == _load(p2).content_sha256()

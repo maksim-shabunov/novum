@@ -57,7 +57,9 @@ eval:
   # MUST stay test_novel_all. test_novel_byclass has one row per (frame, label)
   # and double counts the five multi-label frames. See core/dataset.py.
   novel_split: test_novel_all
-  k_values: [10, 25, 50, 100]
+  # 162 = one 8 Mbit downlink window at 49,152 bits/frame: the operationally
+  # meaningful k. See scripts/evaluate.py.
+  k_values: [10, 25, 50, 100, 162]
   per_class: true
 
 compute:

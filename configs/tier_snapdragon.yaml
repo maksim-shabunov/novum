@@ -1,35 +1,40 @@
 # =============================================================================
 # Snapdragon tier -- larger convolutional autoencoder.
 #
-# STATUS: NOT IMPLEMENTED. This config is valid and parses; training it raises
-# NotImplementedError from core/models/conv_ae.py.
+# Represents a ~5-10 W mobile SoC. Ingenuity flew a Snapdragon 801, so the
+# class is flight-proven -- but this tier is DELIBERATELY overprovisioned
+# relative to what a rover would allocate to science triage. It exists to
+# answer one question: does more compute buy accuracy on this problem, or has
+# the myriad tier already saturated it? Either answer is a result.
 #
-# Represents a ~5-10 W mobile SoC. Ingenuity flew a Snapdragon 801, so this is
-# not a fantasy tier -- it is what a modern rover could plausibly carry as a
-# science coprocessor, and it is where the compute budget stops binding and the
-# downlink budget starts.
+#   make train TIER=snapdragon && make eval ARTIFACT=artifacts/snapdragon.npz
+#
+# Allowed to be slow; must finish on CPU in under an hour on the 20-core
+# target (measured ~15-30 minutes).
 # =============================================================================
 
 tier: snapdragon
 description: >
-  Larger conv autoencoder (32 channels, depth 3, latent 128) for a ~5-10 W SoC.
-  NOT IMPLEMENTED.
+  Larger conv autoencoder (32 base channels, depth 3, dense latent 128) for a
+  Snapdragon-class SoC. Same score and standardized space as the other tiers.
 
 seed: 0
 
 model:
   type: conv_ae_snapdragon
-  channels: 32
-  depth: 3
+  channels: 32          # base width; doubles per stage -> [32, 64, 128]
+  depth: 3              # 64 -> 32 -> 16 -> 8 before the dense bottleneck
   latent_dim: 128
 
-  epochs: 60
+  epochs: 40
   batch_size: 128
   learning_rate: 0.0005
   weight_decay: 0.00001
-  device: cpu          # NOVUM is CPU-only by contract. Do not set to cuda.
-  num_workers: 4
-  early_stopping_patience: 8
+  device: cpu           # NOVUM is CPU-only by contract. Do not set to cuda.
+  num_workers: 0        # reserved; batching is in-process for determinism
+  early_stopping_patience: 6
+  val_split: validation_typical
+  score: recon_mse
 
 transform:
   scale: 255.0
@@ -45,12 +50,12 @@ data:
 eval:
   typical_split: test_typical
   novel_split: test_novel_all
-  k_values: [10, 25, 50, 100]
+  k_values: [10, 25, 50, 100, 162]
   per_class: true
 
 compute:
-  reference_processor: "Qualcomm Snapdragon class SoC, ~5-10 W"
-  cycles_per_flop: 0.1
+  reference_processor: "Qualcomm Snapdragon class SoC (Ingenuity heritage), ~5-10 W"
+  cycles_per_flop: 0.1       # multi-core NEON/HVX
   budget_cycles_per_frame: 2000000000
 
 downlink:

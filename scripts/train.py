@@ -139,24 +139,32 @@ def main(argv: list[str] | None = None) -> int:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     model.save(out_path)
 
+    try:
+        content_sha256 = model.content_sha256()
+    except NotImplementedError:
+        content_sha256 = None
+
     provenance = RunProvenance.build(
         name=out_path.stem,
         tier=tier,
+        model_type=cfg["model"]["type"],
         config=cfg,
+        content_sha256=content_sha256,
+        artifact=str(paths.rel(out_path)),
         wall_clock_seconds=timer.elapsed,
         param_count=model.param_count(),
         flops_per_inference=model.flops_per_inference(),
         n_train_samples=n_samples,
         seed=seed,
+        training=dict(getattr(model, "fit_info_", {}) or {}),
         extra={"train_split": train_split, "artifact_bytes": out_path.stat().st_size},
     )
     sidecar = provenance.write(sidecar_path_for(out_path))
 
     # -- report -------------------------------------------------------------
     record = provenance.to_json()
-    budget_cycles = cfg["compute"].get("budget_cycles_per_frame")
-    cycles_per_flop = float(cfg["compute"].get("cycles_per_flop", 3.0))
-    est_cycles = record["flops_per_inference"] * cycles_per_flop
+    budget = record["compute_budget"]
+    est_cycles = budget["cycles_per_inference"]
 
     log.info("-" * 68)
     log.info("  parameters        %s", f"{record['param_count']:,}")
@@ -166,12 +174,24 @@ def main(argv: list[str] | None = None) -> int:
         f"{est_cycles:,.0f}",
         cfg["compute"].get("reference_processor", "unspecified"),
     )
-    if budget_cycles:
-        pct = 100.0 * est_cycles / float(budget_cycles)
-        verdict = "within budget" if pct <= 100 else "OVER BUDGET"
-        log.info("  compute budget    %.1f%% of %s cycles (%s)", pct, f"{budget_cycles:,}", verdict)
-        if pct > 100:
-            log.warning("this model would not fit the %s compute budget onboard", tier)
+    if budget["budget_utilisation"] is not None:
+        pct = 100.0 * budget["budget_utilisation"]
+        verdict = "within budget" if budget["fits_compute_budget"] else "OVER BUDGET"
+        log.info(
+            "  compute budget    %.1f%% of %s cycles (%s)",
+            pct,
+            f"{budget['budget_cycles_per_frame']:,.0f}",
+            verdict,
+        )
+        # Exceeding the budget is a reportable result, not an error: an honest
+        # "this model needs Nx the tier's cycle budget" is publishable output.
+        if not budget["fits_compute_budget"]:
+            log.warning(
+                "the %s model needs %.1fx this tier's cycle budget; reported, not failed",
+                tier,
+                budget["budget_utilisation"],
+            )
+    log.info("  content sha256    %s", (content_sha256 or "n/a")[:16])
     log.info("  peak RSS          %s", human_bytes(record["peak_rss_bytes"]))
     log.info("  wall clock        %s", human_duration(record["wall_clock_seconds"]))
     log.info("  artifact          %s (%s)", paths.rel(out_path), human_bytes(out_path.stat().st_size))

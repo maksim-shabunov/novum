@@ -1,25 +1,41 @@
 {
+  "sidecar_schema": 2,
   "name": "rad750",
   "tier": "rad750",
-  "config_hash": "05cbde0549919232095cb39323a20795db9bfc9713eb58da971732fc435fd573",
-  "git_commit": "e9b4e958bd2a76060d3b4bf4cf74d2e4f5f4b60c",
-  "git_dirty": true,
+  "model_type": "pca",
+  "config_hash": "24b4080d6333282e5f568646ceff561e542709fb7a88f0b426602e0d742e5907",
+  "content_sha256": "ba3b2fab27a24bf66f27b37e71a9ce0e10c66a4cdfdaf765070bb2f20c13ad75",
+  "artifact": "artifacts/rad750.npz",
+  "git_commit": "2368fdb7181985bb1efe866765d534967d8c3afe",
   "git_branch": "main",
-  "wall_clock_seconds": 51.009,
+  "git_dirty": true,
+  "kind": "training",
+  "created_utc": "2026-08-06T10:07:56Z",
+  "wall_clock_seconds": 15.478,
   "param_count": 399372,
   "flops_per_inference": 866432,
-  "peak_rss_bytes": 1456717824,
-  "peak_rss_mib": 1389.2,
+  "fits_compute_budget": true,
+  "budget_utilisation": 0.1299648,
+  "compute_budget": {
+    "cycles_per_flop": 3.0,
+    "cycles_per_inference": 2599296.0,
+    "budget_cycles_per_frame": 20000000,
+    "fits_compute_budget": true,
+    "budget_utilisation": 0.1299648
+  },
+  "peak_rss_bytes": 1620180992,
+  "peak_rss_mib": 1545.1,
   "n_train_samples": 9302,
   "seed": 0,
-  "created_utc": "2026-08-06T09:19:42Z",
   "environment": {
-    "python": "3.12.3",
-    "numpy": "2.2.6",
-    "platform": "Linux-6.8.0-100-generic-x86_64-with-glibc2.39",
-    "machine": "x86_64",
-    "cpu_count": 20,
-    "device": "cpu"
+    "python": "3.13.12",
+    "numpy": "2.5.1",
+    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "cpu_count": 14,
+    "device": "cpu",
+    "blas_backend": "accelerate",
+    "blas_threads": 14
   },
   "config": {
     "tier": "rad750",
@@ -54,7 +70,8 @@
         10,
         25,
         50,
-        100
+        100,
+        162
       ],
       "per_class": true
     },
@@ -68,10 +85,10 @@
       "compression_ratio": 4.0,
       "budget_bits_per_window": 8000000
     },
-    "_source": "configs/tier_rad750.yaml"
+    "_source": "/Users/maksim/Desktop/novum/configs/tier_rad750.yaml"
   },
   "extra": {
     "train_split": "train_typical",
-    "artifact_bytes": 1477732
+    "artifact_bytes": 1477761
   }
 }

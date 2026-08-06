@@ -30,8 +30,13 @@
 # =============================================================================
 
 # --- core: imported by BOTH the training and serving layers ------------------
+# numpy is THE reproducibility-critical pin: BLAS backend + numpy version set
+# the floating-point summation order. macOS/arm64/numpy 2.5.1 (Accelerate) and
+# Linux/x86_64/numpy 2.2.6 (OpenBLAS) agree on ROC AUC to within 1.1e-5 --
+# documented tolerance, NOT bit-identical. See README "Reproducibility".
 numpy==2.2.6
 PyYAML==6.0.3
+threadpoolctl==3.6.0
 
 # --- data: preprocessing and the sweep table ---------------------------------
 pandas==2.3.3

@@ -39,6 +39,27 @@ def file_sha256(path: Path, chunk_size: int = 1 << 20) -> str:
     return h.hexdigest()
 
 
+def arrays_content_sha256(arrays: dict) -> str:
+    """Hash of the model's numerical content, not its container.
+
+    Two .npz files holding identical arrays can differ byte-for-byte (zip
+    timestamps, compression level, entry order), so file_sha256 of the artifact
+    cannot answer "are these the same weights?". This can: it hashes each
+    array's name, dtype, shape and raw bytes in sorted-key order, and nothing
+    else. Same weights => same hash, on any platform, in any container.
+    """
+    import numpy as np  # local import keeps this module importable bare
+
+    h = hashlib.sha256()
+    for key in sorted(arrays):
+        arr = np.ascontiguousarray(arrays[key])
+        h.update(key.encode("utf-8"))
+        h.update(str(arr.dtype.str).encode("utf-8"))  # dtype.str includes endianness
+        h.update(str(tuple(arr.shape)).encode("utf-8"))
+        h.update(arr.tobytes())
+    return h.hexdigest()
+
+
 def _git(*args: str) -> str | None:
     try:
         out = subprocess.run(
@@ -83,10 +104,50 @@ def peak_rss_bytes() -> int:
     return int(raw) if sys.platform == "darwin" else int(raw) * 1024
 
 
+def _blas_info() -> dict:
+    """BLAS backend and thread count actually in use.
+
+    Recorded because they are the two knobs that make "same code, same data,
+    different last digits" happen: Accelerate vs OpenBLAS vs MKL sum in
+    different orders, and thread count changes reduction trees. threadpoolctl
+    inspects the loaded shared libraries, so this reports what is really
+    linked, not what the wheel metadata claims.
+    """
+    try:
+        from threadpoolctl import threadpool_info  # noqa: PLC0415
+
+        pools = [p for p in threadpool_info() if p.get("user_api") == "blas"]
+        if pools:
+            return {
+                "blas_backend": ",".join(
+                    sorted({str(p.get("internal_api", "?")) for p in pools})
+                ),
+                "blas_threads": max(int(p.get("num_threads", 0)) for p in pools),
+            }
+    except Exception:  # noqa: BLE001 - diagnostics must never break a run
+        pass
+
+    # Fallback: numpy's build metadata (what it was linked against, which on
+    # macOS wheels is Accelerate) and the strongest thread hint available.
+    backend = "unknown"
+    try:
+        import numpy as np  # noqa: PLC0415
+
+        cfg = np.show_config(mode="dicts")  # numpy >= 1.25
+        backend = str(cfg.get("Build Dependencies", {}).get("blas", {}).get("name", "unknown"))
+    except Exception:  # noqa: BLE001
+        pass
+    threads = os.environ.get("OPENBLAS_NUM_THREADS") or os.environ.get("OMP_NUM_THREADS")
+    return {
+        "blas_backend": backend,
+        "blas_threads": int(threads) if threads and threads.isdigit() else os.cpu_count(),
+    }
+
+
 def environment_info() -> dict:
     import numpy as np  # local import keeps this module importable bare
 
-    return {
+    info = {
         "python": sys.version.split()[0],
         "numpy": np.__version__,
         "platform": platform.platform(),
@@ -94,7 +155,15 @@ def environment_info() -> dict:
         "cpu_count": os.cpu_count(),
         # NOVUM is CPU-only by contract; record it so a stray CUDA run is obvious.
         "device": "cpu",
+        **_blas_info(),
     }
+    # Record torch only when this run actually used it. sys.modules, not an
+    # import: a PCA run must not pull torch in just to write a sidecar.
+    torch = sys.modules.get("torch")
+    if torch is not None:
+        info["torch"] = str(torch.__version__)
+        info["torch_threads"] = int(torch.get_num_threads())
+    return info
 
 
 class Timer:
@@ -112,13 +181,74 @@ class Timer:
         self.elapsed = time.perf_counter() - self.start
 
 
+#: Both sidecars (artifacts/<name>.json and artifacts/metrics/<name>.json) carry
+#: this schema marker and share the identity block below, so tooling can join
+#: them on (config_hash, content_sha256) without guessing which fields exist.
+SIDECAR_SCHEMA_VERSION = 2
+
+
+def identity_block(
+    *,
+    name: str,
+    tier: str | None,
+    model_type: str | None,
+    config_hash_: str | None,
+    content_sha256: str | None,
+    artifact: str | None,
+) -> dict:
+    """The fields every sidecar shares. One builder so they cannot drift."""
+    return {
+        "sidecar_schema": SIDECAR_SCHEMA_VERSION,
+        "name": name,
+        "tier": tier,
+        "model_type": model_type,
+        "config_hash": config_hash_,
+        "content_sha256": content_sha256,
+        "artifact": artifact,
+        "git_commit": git_commit(),
+        "git_branch": git_branch(),
+        "git_dirty": git_dirty(),
+    }
+
+
+def compute_budget_block(
+    *,
+    flops_per_inference: int,
+    cycles_per_flop: float,
+    budget_cycles_per_frame: float | None,
+) -> dict:
+    """The compute-budget verdict. This is the point of the project.
+
+    A model exceeding its tier budget is NOT an error -- "the snapdragon model
+    needs 7x the RAD750 cycle budget" is a publishable result, not a failure.
+    So this reports plainly and never raises.
+    """
+    cycles = float(flops_per_inference) * float(cycles_per_flop)
+    block = {
+        "cycles_per_flop": float(cycles_per_flop),
+        "cycles_per_inference": cycles,
+        "budget_cycles_per_frame": budget_cycles_per_frame,
+    }
+    if budget_cycles_per_frame and budget_cycles_per_frame > 0:
+        utilisation = cycles / float(budget_cycles_per_frame)
+        block["fits_compute_budget"] = bool(cycles <= float(budget_cycles_per_frame))
+        block["budget_utilisation"] = utilisation
+    else:
+        block["fits_compute_budget"] = None
+        block["budget_utilisation"] = None
+    return block
+
+
 @dataclass
 class RunProvenance:
-    """The sidecar record written next to every artifact."""
+    """The training sidecar written next to every artifact."""
 
     name: str
     tier: str
+    model_type: str
     config_hash: str
+    content_sha256: str | None
+    artifact: str | None
     config: dict
     git_commit: str | None
     git_dirty: bool | None
@@ -130,6 +260,8 @@ class RunProvenance:
     n_train_samples: int
     seed: int
     created_utc: str
+    compute_budget: dict = field(default_factory=dict)
+    training: dict = field(default_factory=dict)
     environment: dict = field(default_factory=environment_info)
     extra: dict = field(default_factory=dict)
 
@@ -139,18 +271,26 @@ class RunProvenance:
         *,
         name: str,
         tier: str,
+        model_type: str,
         config: dict,
+        content_sha256: str | None,
+        artifact: str | None,
         wall_clock_seconds: float,
         param_count: int,
         flops_per_inference: int,
         n_train_samples: int,
         seed: int,
+        training: dict | None = None,
         extra: dict | None = None,
     ) -> RunProvenance:
+        compute_cfg = config.get("compute", {}) or {}
         return cls(
             name=name,
             tier=tier,
+            model_type=model_type,
             config_hash=config_hash(config),
+            content_sha256=content_sha256,
+            artifact=artifact,
             config=config,
             git_commit=git_commit(),
             git_dirty=git_dirty(),
@@ -162,25 +302,40 @@ class RunProvenance:
             n_train_samples=int(n_train_samples),
             seed=int(seed),
             created_utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            compute_budget=compute_budget_block(
+                flops_per_inference=int(flops_per_inference),
+                cycles_per_flop=float(compute_cfg.get("cycles_per_flop", 1.0)),
+                budget_cycles_per_frame=compute_cfg.get("budget_cycles_per_frame"),
+            ),
+            training=training or {},
             extra=extra or {},
         )
 
     def to_json(self) -> dict:
         return {
-            "name": self.name,
-            "tier": self.tier,
-            "config_hash": self.config_hash,
-            "git_commit": self.git_commit,
-            "git_dirty": self.git_dirty,
-            "git_branch": self.git_branch,
+            **identity_block(
+                name=self.name,
+                tier=self.tier,
+                model_type=self.model_type,
+                config_hash_=self.config_hash,
+                content_sha256=self.content_sha256,
+                artifact=self.artifact,
+            ),
+            "kind": "training",
+            "created_utc": self.created_utc,
             "wall_clock_seconds": round(self.wall_clock_seconds, 3),
             "param_count": self.param_count,
             "flops_per_inference": self.flops_per_inference,
+            # The two keys the project contract names explicitly, surfaced at
+            # the top level exactly as specified, duplicating compute_budget.
+            "fits_compute_budget": self.compute_budget.get("fits_compute_budget"),
+            "budget_utilisation": self.compute_budget.get("budget_utilisation"),
+            "compute_budget": self.compute_budget,
             "peak_rss_bytes": self.peak_rss_bytes,
             "peak_rss_mib": round(self.peak_rss_bytes / (1024 * 1024), 1),
             "n_train_samples": self.n_train_samples,
             "seed": self.seed,
-            "created_utc": self.created_utc,
+            **({"training": self.training} if self.training else {}),
             "environment": self.environment,
             "config": self.config,
             **({"extra": self.extra} if self.extra else {}),

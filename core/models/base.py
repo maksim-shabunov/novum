@@ -64,6 +64,25 @@ class NoveltyModel(abc.ABC):
         """Estimated multiply-add count to score one frame, transform included."""
 
     # -- persistence --------------------------------------------------------
+    def _persistable_arrays(self) -> dict[str, np.ndarray]:
+        """The model's numerical content as named arrays.
+
+        Implementations must return exactly what save() stores (minus the meta
+        JSON blob), because content_sha256() hashes this dict and the whole
+        point is that the hash identifies the stored weights.
+        """
+        raise NotImplementedError(f"{type(self).__name__} does not expose its arrays")
+
+    def content_sha256(self) -> str:
+        """Hash of the model arrays themselves, not of the .npz container.
+
+        Container bytes vary with zip timestamps and compression; this does
+        not. Two artifacts with equal content_sha256 hold identical weights.
+        """
+        from ..provenance import arrays_content_sha256  # local: avoid a cycle
+
+        return arrays_content_sha256(self._persistable_arrays())
+
     @abc.abstractmethod
     def save(self, path: str | Path) -> Path:
         """Write weights to a .npz. Must round-trip through `load`."""

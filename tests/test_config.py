@@ -48,7 +48,7 @@ def test_defaults_fill_in_unspecified_keys(tmp_path: Path) -> None:
     cfg = load_config(path)
     assert cfg["seed"] == 0
     assert cfg["data"]["train_split"] == "train_typical"
-    assert cfg["eval"]["k_values"] == [10, 25, 50, 100]
+    assert cfg["eval"]["k_values"] == [10, 25, 50, 100, 162]
 
 
 def test_overrides_win_over_the_file(tmp_path: Path) -> None:

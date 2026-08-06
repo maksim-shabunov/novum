@@ -24,6 +24,10 @@ keywords = ["novelty-detection", "mars", "mastcam", "onboard-autonomy", "downlin
 dependencies = [
   "numpy>=1.24",
   "pyyaml>=6.0",
+  # Pure-python, ~30 KB: reports which BLAS is actually linked and how many
+  # threads it runs -- recorded in every sidecar's environment block, because
+  # those two knobs are what make "same code, different last digits" happen.
+  "threadpoolctl>=3",
 ]
 
 [project.optional-dependencies]

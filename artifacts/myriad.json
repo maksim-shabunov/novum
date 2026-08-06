@@ -1,0 +1,114 @@
+{
+  "sidecar_schema": 2,
+  "name": "myriad",
+  "tier": "myriad",
+  "model_type": "conv_ae_myriad",
+  "config_hash": "705e0a05f5c71fbda951ea1c5f1c02fdcc55cc63f06aa361a8a1d1a55ee33260",
+  "content_sha256": "68a2ae0d5e7cf59aa52e6f1132533b318a2e23e52fe6bdd2c26a170f17022674",
+  "artifact": "artifacts/myriad.npz",
+  "git_commit": "2368fdb7181985bb1efe866765d534967d8c3afe",
+  "git_branch": "main",
+  "git_dirty": true,
+  "kind": "training",
+  "created_utc": "2026-08-06T10:10:18Z",
+  "wall_clock_seconds": 109.288,
+  "param_count": 543797,
+  "flops_per_inference": 9428992,
+  "fits_compute_budget": true,
+  "budget_utilisation": 0.02357248,
+  "compute_budget": {
+    "cycles_per_flop": 0.25,
+    "cycles_per_inference": 2357248.0,
+    "budget_cycles_per_frame": 100000000,
+    "fits_compute_budget": true,
+    "budget_utilisation": 0.02357248
+  },
+  "peak_rss_bytes": 1725890560,
+  "peak_rss_mib": 1645.9,
+  "n_train_samples": 9302,
+  "seed": 0,
+  "training": {
+    "epochs_run": 17,
+    "best_epoch": 12,
+    "best_val_loss": 0.20403593190878042,
+    "final_train_loss": 0.15676937577314876,
+    "early_stopped": true,
+    "val_source": "validation_typical",
+    "n_train_used": 9302,
+    "train_seconds": 107.21
+  },
+  "environment": {
+    "python": "3.13.12",
+    "numpy": "2.5.1",
+    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "cpu_count": 14,
+    "device": "cpu",
+    "blas_backend": "accelerate",
+    "blas_threads": 14,
+    "torch": "2.9.1",
+    "torch_threads": 10
+  },
+  "config": {
+    "tier": "myriad",
+    "description": "Small conv autoencoder (16 base channels, depth 2, dense latent 32) for a Myriad 2 class VPU. Novelty score is per-frame reconstruction MSE in the same standardized space the RAD750 tier scores in, so the comparison is fair.\n",
+    "seed": 0,
+    "model": {
+      "type": "conv_ae_myriad",
+      "channels": 16,
+      "depth": 2,
+      "latent_dim": 32,
+      "epochs": 40,
+      "batch_size": 128,
+      "learning_rate": 0.001,
+      "weight_decay": 0.0,
+      "device": "cpu",
+      "num_workers": 0,
+      "early_stopping_patience": 5,
+      "val_split": "validation_typical",
+      "score": "recon_mse"
+    },
+    "transform": {
+      "scale": 255.0,
+      "downsample": 1,
+      "standardize": "per_band",
+      "frame_shape": [
+        64,
+        64,
+        6
+      ]
+    },
+    "data": {
+      "train_split": "train_typical",
+      "max_train_samples": null,
+      "chunk_size": 256
+    },
+    "eval": {
+      "typical_split": "test_typical",
+      "novel_split": "test_novel_all",
+      "k_values": [
+        10,
+        25,
+        50,
+        100,
+        162
+      ],
+      "per_class": true
+    },
+    "compute": {
+      "reference_processor": "Intel Movidius Myriad 2 VPU (Phi-Sat-1), ~1 W",
+      "cycles_per_flop": 0.25,
+      "budget_cycles_per_frame": 100000000
+    },
+    "downlink": {
+      "bits_per_sample": 8,
+      "compression_ratio": 4.0,
+      "budget_bits_per_window": 8000000
+    },
+    "_source": "/Users/maksim/Desktop/novum/configs/tier_myriad.yaml"
+  },
+  "extra": {
+    "train_split": "train_typical",
+    "artifact_bytes": 2026034
+  }
+}

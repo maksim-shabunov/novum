@@ -620,15 +620,46 @@ def main(argv: list[str] | None = None) -> int:
         }
         built.append(plan.name)
 
-    # Splits we skipped still need their manifest rows carried forward.
-    if reused:
+    # Every split we did NOT rebuild keeps its previous manifest rows: the
+    # reused ones AND any split excluded by --only. Carrying forward only the
+    # `reused` list once truncated the manifest to a single split after
+    # `--only train_typical --force`, leaving arrays with zero manifest rows.
+    carried = {name for name in existing_splits if name not in built}
+    if carried:
         try:
             from core.manifest import read_manifest
 
             previous = read_manifest(out_dir / "manifest.csv")
-            manifest_rows.extend(r for r in previous if r.split in reused)
+            carried_rows = [r for r in previous if r.split in carried]
+            manifest_rows.extend(carried_rows)
+
+            rows_by_split: dict[str, int] = {}
+            for row in carried_rows:
+                rows_by_split[row.split] = rows_by_split.get(row.split, 0) + 1
+            for name in sorted(carried):
+                expected = int(existing_splits[name].get("count", 0))
+                got = rows_by_split.get(name, 0)
+                if got != expected and (out_dir / existing_splits[name]["path"]).exists():
+                    log.warning(
+                        "%s: previous manifest holds %d rows but the array has %d frames; "
+                        "rebuilding that split's rows",
+                        name,
+                        got,
+                        expected,
+                    )
+                    plan = next((p for p in plans if p.name == name), None)
+                    if plan is not None:
+                        manifest_rows = [r for r in manifest_rows if r.split != name]
+                        _, rows, _ = build_split(plan, out_dir, skip_bad=args.skip_bad)
+                        manifest_rows.extend(rows)
+                    else:
+                        log.warning(
+                            "%s is not in this run's plan (--only?); its manifest rows stay "
+                            "missing until a full `python -m scripts.preprocess` run",
+                            name,
+                        )
         except (FileNotFoundError, ValueError) as exc:
-            log.warning("could not reuse manifest rows for %s (%s); rebuilding them", reused, exc)
+            log.warning("could not carry manifest rows forward (%s); rebuilding reused splits", exc)
             for plan in plans:
                 if plan.name in reused:
                     _, rows, _ = build_split(plan, out_dir, skip_bad=args.skip_bad)

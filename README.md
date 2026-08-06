@@ -212,80 +212,109 @@ would break Ubuntu 22.04. `make lock` freezes the full transitive set for the
 current machine into `requirements-lock.txt` (platform-specific; regenerate it
 on the target rather than copying one across architectures).
 
+**What "reproducible" means here — a documented tolerance, not bit-identity.**
+Cross-platform floating point does not reproduce bitwise: the BLAS backend
+(Accelerate on macOS wheels, OpenBLAS on Linux wheels) and thread count set the
+summation order, and the summation order sets the last digits. Measured:
+a run on macOS/arm64/numpy 2.5.1 and one on Linux/x86_64/numpy 2.2.6 agree on
+ROC AUC to within **1.1e-5**. That is the claim; nothing here pretends to
+bit-identical cross-platform results. What IS held exactly:
+
+- **same machine, same seed → identical weights.** The AE tiers seed torch,
+  numpy, and batch order (no DataLoader worker pool exists to break it); there
+  is a test that trains twice and compares `content_sha256`.
+- **component signs are canonical** (`svd_flip`: largest-magnitude element of
+  each PCA component forced positive), so artifacts differ across BLAS
+  implementations only in genuine float noise, not in arbitrary ±sign patterns.
+- **every sidecar records** the BLAS backend and thread count actually linked
+  (via `threadpoolctl`), numpy/torch versions, and a `content_sha256` over the
+  model arrays themselves — not the .npz container, whose bytes vary with zip
+  timestamps. Same weights ⇒ same hash, any platform.
+
 ---
 
 ## Model tiers
 
-Each tier is a config, named for the class of flight processor it targets.
+Each tier is a config, named for the class of flight processor it targets. All
+three are implemented end to end, score novelty the same way — reconstruction
+error of a model fitted to typical terrain, in the same standardized space —
+and differ only in how expressive that model is. That is what makes the
+comparison fair.
 
-| Tier | Config | Model | Status |
-|---|---|---|---|
-| **RAD750** | `configs/tier_rad750.yaml` | PCA reconstruction error | **implemented end to end** |
-| Myriad X | `configs/tier_myriad.yaml` | small conv autoencoder | stub — `NotImplementedError` |
-| Snapdragon | `configs/tier_snapdragon.yaml` | larger conv autoencoder | stub — `NotImplementedError` |
+| Tier | Hardware it represents | Model | Params | FLOPs/inf |
+|---|---|---|---|---|
+| **rad750** | BAE RAD750, ~200 MHz, no SIMD — Curiosity & Perseverance's CPU | PCA, 64 components | 399k | 0.87 M |
+| **myriad** | Intel Movidius Myriad 2 VPU, ~1 W — flew on ESA's Phi-Sat-1 | conv AE, base 16, depth 2, latent 32 | 544k | 9.4 M |
+| **snapdragon** | Snapdragon-class SoC, ~5–10 W — Ingenuity heritage; deliberately overprovisioned | conv AE, base 32, depth 3, latent 128 | 2.29M | 49.2 M |
 
-The stub configs are valid and parse, so `make sweep` walks all three, records
-the autoencoder tiers as `not_implemented`, and keeps going.
+**rad750.** Scoring must cost a handful of dot products. PCA gives exactly
+that: the model is a `k × D` matrix, inference is one matrix-vector product,
+and novelty is the energy the principal subspace fails to explain. Fitting uses
+a **streaming randomized SVD** through chunked passes over the memmap (peak
+`O(n·l + D·l)`, not `O(n·D)`). No scikit-learn: `core/` is imported by the API,
+and the API has no training deps. Component signs are canonicalised
+(`svd_flip`) so artifacts are comparable across BLAS implementations.
 
-**RAD750 tier.** A BAE RAD750 runs at ~200 MHz with no vector unit; Curiosity
-and Perseverance both fly one. Scoring must cost a handful of dot products.
-PCA gives exactly that: the model is a `k × D` matrix, inference is one
-matrix-vector product, and novelty is the energy the principal subspace fails
-to explain. Fitting uses a **streaming randomized SVD** driven through chunked
-passes over the memmap, so peak memory is `O(n·l + D·l)` rather than `O(n·D)` —
-the centred design matrix at full resolution is ~900 MB, the range finder is ~8 MB.
-
-No scikit-learn: `core/` is imported by the API, and the API has no training deps.
+**myriad / snapdragon.** One conv autoencoder implementation, scaled:
+`[Conv(3×3, stride 2) + BN + ReLU] × depth`, dense latent bottleneck, mirrored
+transposed-conv decoder, MSE loss over typical terrain only. Trained CPU-only,
+streaming shuffled minibatches straight off the memmap (fancy-indexed per
+batch; the split is never loaded whole), deterministic per seed: torch seeded,
+numpy seeded, and batch order owned by a seeded numpy Generator — there is no
+DataLoader worker pool to introduce nondeterminism. Early stopping watches
+reconstruction loss on `validation_typical`. Measured training wall clock:
+myriad ~2 min, snapdragon ~9 min (budgets: 15 min and 1 h).
 
 ---
 
 ## Results
 
-Measured on the full dataset — 9,302 training frames, evaluated on 426
-`test_typical` vs 430 `test_novel_all`. This is what the committed artifact
-scores; reproduce it with `make train && make eval`.
+The full comparison lives in [`results/RESULTS.md`](results/RESULTS.md),
+regenerated by `make sweep` (3 tiers × 3 seeds, mean ± sd). Summary — 426
+`test_typical` vs 430 `test_novel/all`, chance 0.502, reference ROC AUC 0.65
+(Kerner et al. 2020 conv AE):
 
-| | RAD750 (PCA, k=64) |
-|---|---|
-| **ROC AUC** | **0.6385** |
-| Average precision | 0.6348 |
-| precision@10 | 0.90 |
-| precision@25 | 0.80 |
-| precision@100 | 0.72 |
-| Chance baseline | 0.5023 |
-| Reference (conv AE, Kerner et al.) | 0.65 |
-| Parameters | 399,372 |
-| FLOPs / inference | 866,432 |
-| Estimated cycles / frame | 2.6 M — **13% of the RAD750 budget** |
-| Artifact size | 1.4 MB |
-| Training wall clock | 14.8 s |
-| Variance over seeds 0,1,2 | 0.6389 ± 0.0012 |
+| tier | p@10 | ROC AUC natural | ROC AUC rover | ROC AUC aggregate | FLOPs/inf | fits own budget | fits a RAD750? |
+|---|---|---|---|---|---|---|---|
+| rad750 | 0.867 ± 0.047 | 0.887 | 0.478 | 0.639 ± 0.001 | 0.87 M | yes (13%) | **yes** (13%) |
+| myriad | 0.867 ± 0.047 | 0.888 | **0.534** | **0.673 ± 0.002** | 9.4 M | yes (2.4%) | no — 1.4× over |
+| snapdragon | **1.000 ± 0.000** | 0.889 | 0.498 | 0.651 ± 0.005 | 49.2 M | yes (0.2%) | no — 7.4× over |
 
-A linear model lands **0.012 below** the published conv-autoencoder reference
-while fitting in an eighth of a RAD750's per-frame compute budget. That is the
-whole argument for having a cheap tier at all, and it is why the autoencoder
-tiers have to justify themselves rather than being assumed better.
+Four findings, in the order they matter:
 
-The per-class breakdown is where it gets interesting:
+1. **Natural geology is saturated by the linear model.** All three tiers land
+   at 0.887–0.889 on Mars-made novelty. 57× more FLOPs buys +0.002. If the
+   mission's question is "show me terrain unlike what the rover has driven
+   over", a RAD750 running PCA already answers it — and everything above it is
+   spending cycles on nothing.
 
-| Class | n | ROC AUC | |
-|---|---|---|---|
-| veins | 30 | 0.941 | high-contrast mineral texture |
-| broken-rock | 76 | 0.914 | |
-| float | 18 | 0.881 | |
-| bedrock | 11 | 0.837 | |
-| meteorite | 34 | 0.797 | |
-| scuff | 12 | 0.665 | |
-| drill-hole | 62 | 0.599 | |
-| dump-pile | 93 | 0.463 | **below chance** |
-| drt | 111 | 0.423 | **below chance** |
+2. **What extra compute actually buys is the rover's own footprint.** The
+   myriad autoencoder beats PCA by +0.056 on rover-made novelty (0.534 vs
+   0.478, sd ≈ 0.004 — a real gap, not seed noise), lifting drill-hole
+   0.60→0.65 and dump-pile 0.46→0.58. That is the only place the nonlinear
+   model earns its 11× FLOPs, and it is what pushes the aggregate to
+   **0.673, above the published 0.65 reference**.
 
-Reconstruction error finds *texture*. It does well on veins and broken rock,
-and it fails on `drt` (dust removal tool) and `dump-pile` — subtle, low-contrast
-surface changes that a 64-component linear subspace reconstructs perfectly well.
-Those two classes are 204 of the 451 labelled novel frames, so they drag the
-aggregate number down substantially. **That failure mode is the case for the
-autoencoder tiers**, and it is the first thing to check once they exist.
+3. **More compute is not monotone.** The snapdragon model — 4× the params, 5×
+   the FLOPs of myriad — is *worse* than myriad on rover-made novelty (0.498)
+   and on the aggregate (0.651). Where it wins is the extreme top of the
+   ranking: **precision@10 = 1.000 across every seed** (myriad 0.867). The
+   big model is more certain about its most confident picks and no better at
+   the mid-ranking discrimination the aggregate measures. Whether that trade
+   is worth 5× the cycles depends entirely on how big the downlink window is.
+
+4. **Neither autoencoder fits the processor the rover actually flies.** On a
+   RAD750's cost model the myriad net needs 1.4× and the snapdragon net 7.4×
+   the per-frame cycle budget. The myriad tier's gains are real but they
+   require flying an accelerator — which is exactly what ESA did on Phi-Sat-1,
+   and exactly the trade this project exists to make measurable.
+
+There is also an argument that the rad750/myriad gap matters less than it
+looks: rover-made "novelty" — drill holes, wheel scuffs, dump piles — is
+terrain the mission already knows about. A triage system near chance on those
+classes is arguably *filtering* them, which is desirable downlink behaviour.
+The decomposition exists so that argument can be made (or attacked) with
+numbers instead of an aggregate that hides it.
 
 ---
 
@@ -619,18 +648,20 @@ sim/             downlink window simulator — replay() is a stub
 api/             FastAPI — artifact endpoints live, scoring returns 501
 web/             placeholder, not scaffolded
 docker/          Dockerfile.train, Dockerfile.api, docker-compose.yml
-tests/           179 tests: dependency separation, double counting, memory bounds
+results/         RESULTS.md — the per-tier comparison table, committed
+tests/           207 tests: dependency separation, double counting, memory
+                 bounds, AE determinism, taxonomy decomposition
 ```
 
-## What is a stub
+## What is still a stub
 
-Everything below is explicitly marked and raises `NotImplementedError` with an
-actionable message:
-
-- `core/models/conv_ae.py` — both autoencoder tiers (configs are valid and parse)
 - `sim/window.py` — `replay()`; `plan_windows` and `chronological_order` are real
 - `api/main.py` — `POST /api/score` and `GET /api/simulate` return 501
 - `web/` — empty by intent
+
+The model tiers are no longer stubs: all three train, evaluate and ship
+committed artifacts. `scripts/train.py` still exits 3 for a hypothetical
+unimplemented tier, and `sweep.py` still records that distinctly from failure.
 
 ## Development
 
@@ -643,7 +674,7 @@ make lint            # ruff
 make lock            # freeze the transitive dep set for this machine
 ```
 
-Three tests encode the invariants that are easy to break by accident and hard
+These tests encode the invariants that are easy to break by accident and hard
 to notice:
 
 | Test | Guards |
@@ -652,6 +683,8 @@ to notice:
 | `test_double_counting.py` | `test_novel/all/` never merges with the class folders |
 | `test_preprocess_memory.py` | preprocessing stays O(1) in dataset size |
 | `test_bootstrap_and_doctor.py` | `doctor.py` stays stdlib-only and old-Python parseable |
+| `test_conv_ae.py` | same seed ⇒ identical weights (`content_sha256` equality) |
+| `test_taxonomy_and_decomposition.py` | excluded classes are never folded into a group |
 
 ## License
 

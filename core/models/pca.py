@@ -145,6 +145,24 @@ class _DesignMatrix:
         return out
 
 
+def _svd_flip(components: np.ndarray) -> np.ndarray:
+    """Canonicalise component signs: largest-|.| element of each row positive.
+
+    An SVD is only defined up to the sign of each singular vector, and different
+    BLAS backends (Accelerate on macOS, OpenBLAS on Linux wheels, MKL) settle on
+    different signs. Every score mode is sign-invariant, so this changes no
+    number the model produces -- but without it, artifacts trained on two
+    machines differ in sign pattern and content_sha256 can never match across
+    platforms even when the models agree.
+    """
+    flipped = np.array(components, copy=True)
+    pivot = np.argmax(np.abs(flipped), axis=1)
+    signs = np.sign(flipped[np.arange(len(flipped)), pivot])
+    signs[signs == 0] = 1.0
+    flipped *= signs[:, None]
+    return flipped
+
+
 class PCANoveltyModel(NoveltyModel):
     """Principal-subspace reconstruction-error novelty detector."""
 
@@ -249,9 +267,10 @@ class PCANoveltyModel(NoveltyModel):
         # B = Q^T Xc, obtained as the transpose of Xc^T Q.
         b = source.rmatmul(q).T
         _, singular_values, vt = np.linalg.svd(b, full_matrices=False)
+        components = _svd_flip(vt[:k])
 
         self.mean_ = mean.astype(np.float32)
-        self.components_ = np.ascontiguousarray(vt[:k], dtype=np.float32)
+        self.components_ = np.ascontiguousarray(components, dtype=np.float32)
         self.singular_values_ = singular_values[:k].astype(np.float64)
         denom = max(1, n - 1)
         self.explained_variance_ = (self.singular_values_**2) / denom
@@ -324,9 +343,25 @@ class PCANoveltyModel(NoveltyModel):
         return int(cost)
 
     # -- persistence --------------------------------------------------------
-    def save(self, path: str | Path) -> Path:
+    def _persistable_arrays(self) -> dict[str, np.ndarray]:
+        """The numerical content of the model. Feeds both save() and the
+        content hash, so what is hashed is exactly what is stored."""
         self._require_fitted()
         assert self.components_ is not None and self.mean_ is not None
+        arrays: dict[str, np.ndarray] = {
+            "mean": self.mean_,
+            "components": self.components_,
+            "singular_values": self.singular_values_,
+            "explained_variance": self.explained_variance_,
+        }
+        if self.transform.mean_ is not None:
+            arrays["transform_mean"] = self.transform.mean_
+        if self.transform.std_ is not None:
+            arrays["transform_std"] = self.transform.std_
+        return arrays
+
+    def save(self, path: str | Path) -> Path:
+        self._require_fitted()
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -341,17 +376,7 @@ class PCANoveltyModel(NoveltyModel):
             "explained_variance_ratio_sum": self.explained_variance_ratio_sum,
             "transform": self.transform.to_dict(),
         }
-        arrays: dict[str, np.ndarray] = {
-            "meta": self._pack_meta(meta),
-            "mean": self.mean_,
-            "components": self.components_,
-            "singular_values": self.singular_values_,
-            "explained_variance": self.explained_variance_,
-        }
-        if self.transform.mean_ is not None:
-            arrays["transform_mean"] = self.transform.mean_
-        if self.transform.std_ is not None:
-            arrays["transform_std"] = self.transform.std_
+        arrays = {"meta": self._pack_meta(meta), **self._persistable_arrays()}
 
         # np.savez_compressed appends ".npz" to any path that does not already
         # end in it, so the temp name must keep that suffix or the rename below

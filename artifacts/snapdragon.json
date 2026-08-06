@@ -1,0 +1,114 @@
+{
+  "sidecar_schema": 2,
+  "name": "snapdragon",
+  "tier": "snapdragon",
+  "model_type": "conv_ae_snapdragon",
+  "config_hash": "1e26e2a863f78dc6e4ee508d1465af129c2da0be1dcd22f602cdde948b9d6e51",
+  "content_sha256": "7180b13811fd5f2a6db1d064915099be2c5b04d6da0840bc3d7a66a3871b20db",
+  "artifact": "artifacts/snapdragon.npz",
+  "git_commit": "2368fdb7181985bb1efe866765d534967d8c3afe",
+  "git_branch": "main",
+  "git_dirty": true,
+  "kind": "training",
+  "created_utc": "2026-08-06T10:24:31Z",
+  "wall_clock_seconds": 530.374,
+  "param_count": 2294871,
+  "flops_per_inference": 49209344,
+  "fits_compute_budget": true,
+  "budget_utilisation": 0.0024604672,
+  "compute_budget": {
+    "cycles_per_flop": 0.1,
+    "cycles_per_inference": 4920934.4,
+    "budget_cycles_per_frame": 2000000000,
+    "fits_compute_budget": true,
+    "budget_utilisation": 0.0024604672
+  },
+  "peak_rss_bytes": 1908801536,
+  "peak_rss_mib": 1820.4,
+  "n_train_samples": 9302,
+  "seed": 0,
+  "training": {
+    "epochs_run": 38,
+    "best_epoch": 32,
+    "best_val_loss": 0.0972576049613861,
+    "final_train_loss": 0.0855913901586631,
+    "early_stopped": true,
+    "val_source": "validation_typical",
+    "n_train_used": 9302,
+    "train_seconds": 529.04
+  },
+  "environment": {
+    "python": "3.13.12",
+    "numpy": "2.5.1",
+    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "cpu_count": 14,
+    "device": "cpu",
+    "blas_backend": "accelerate",
+    "blas_threads": 14,
+    "torch": "2.9.1",
+    "torch_threads": 10
+  },
+  "config": {
+    "tier": "snapdragon",
+    "description": "Larger conv autoencoder (32 base channels, depth 3, dense latent 128) for a Snapdragon-class SoC. Same score and standardized space as the other tiers.\n",
+    "seed": 0,
+    "model": {
+      "type": "conv_ae_snapdragon",
+      "channels": 32,
+      "depth": 3,
+      "latent_dim": 128,
+      "epochs": 40,
+      "batch_size": 128,
+      "learning_rate": 0.0005,
+      "weight_decay": 1e-05,
+      "device": "cpu",
+      "num_workers": 0,
+      "early_stopping_patience": 6,
+      "val_split": "validation_typical",
+      "score": "recon_mse"
+    },
+    "transform": {
+      "scale": 255.0,
+      "downsample": 1,
+      "standardize": "per_band",
+      "frame_shape": [
+        64,
+        64,
+        6
+      ]
+    },
+    "data": {
+      "train_split": "train_typical",
+      "max_train_samples": null,
+      "chunk_size": 256
+    },
+    "eval": {
+      "typical_split": "test_typical",
+      "novel_split": "test_novel_all",
+      "k_values": [
+        10,
+        25,
+        50,
+        100,
+        162
+      ],
+      "per_class": true
+    },
+    "compute": {
+      "reference_processor": "Qualcomm Snapdragon class SoC (Ingenuity heritage), ~5-10 W",
+      "cycles_per_flop": 0.1,
+      "budget_cycles_per_frame": 2000000000
+    },
+    "downlink": {
+      "bits_per_sample": 8,
+      "compression_ratio": 4.0,
+      "budget_bits_per_window": 8000000
+    },
+    "_source": "/Users/maksim/Desktop/novum/configs/tier_snapdragon.yaml"
+  },
+  "extra": {
+    "train_split": "train_typical",
+    "artifact_bytes": 8541766
+  }
+}
