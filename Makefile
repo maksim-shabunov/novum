@@ -131,6 +131,9 @@ train: guard-venv ## Train one tier (default TIER=rad750)
 sweep: guard-venv ## Run the full (tier x seed) matrix, unattended
 	$(PY) -m scripts.sweep --tiers $(TIERS) --seeds $(SEEDS)
 
+report: guard-venv ## Regenerate results/RESULTS.md from stored sweep metrics (no retraining)
+	$(PY) -m scripts.report
+
 eval: guard-venv ## Evaluate the current artifact and print ROC AUC
 	$(PY) -m scripts.evaluate --artifact $(ARTIFACT)
 

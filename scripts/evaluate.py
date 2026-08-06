@@ -10,13 +10,18 @@ numbers that go with the committed weights. Both records share the sidecar
 identity block (core.provenance.identity_block), so they join cleanly on
 config_hash and content_sha256.
 
-METRIC ORDERING IS DELIBERATE. precision@k leads the printed output because a
-downlink window carries ~162 frames (8 Mbit at 49,152 bits/frame): only the
-top of the ranking has any operational meaning -- a frame ranked 400th of 856
-does not get transmitted whether the model ordered the tail well or not.
+METRIC ORDERING IS DELIBERATE. precision@WINDOW leads: the window size is
+derived from the tier's own downlink config (budget_bits_per_window divided by
+the per-frame bit cost after compression -- for the shipped configs, 8 Mbit /
+49,152 bits = 162 frames) and the derivation is printed, never hardcoded. Only
+frames inside that window get transmitted, so precision at exactly that k is
+the operational figure. Smaller k values (p@10, p@25) are kept as
+top-of-ranking DIAGNOSTICS -- they answer "how confident are the model's best
+picks", not "how good is the downlink" -- and the distinction matters: at k=10
+the snapdragon model looks perfect while at k=window the myriad model wins.
 ROC AUC integrates over every threshold, most of which the mission will never
-operate at, so it appears below the headline as the literature-comparison
-figure (Kerner et al. 2020 report 0.65 for a conv autoencoder on this dataset).
+operate at, so it appears below as the literature-comparison figure (Kerner
+et al. 2020 report 0.65 for a conv autoencoder on this dataset).
 
 The aggregate is also decomposed (core.taxonomy): novelty because Mars made it
 (natural) versus novelty because the rover did it (rover). Task-1 showed the
@@ -43,6 +48,7 @@ from core.budgets import (
     BudgetSpec,
     estimate_bits_from_frames,
     estimate_frame_cycles,
+    frames_per_window,
     select_two_budget,
 )
 from core.dataset import SPLIT_NOVEL_BYCLASS, ChunkedArray, load_split
@@ -57,10 +63,39 @@ log = get_logger("novum.evaluate")
 REFERENCE_CONV_AE_ROC_AUC = 0.65
 REFERENCE_SOURCE = "Kerner et al. 2020, conv autoencoder on Mastcam novelty (ROC AUC 0.65)"
 
-#: One 8 Mbit downlink window at 49,152 bits/frame ~= 162 frames.
-FRAMES_PER_WINDOW = 162
+#: Fallback k list when neither config nor CLI supplies one. 162 is what the
+#: shipped configs derive (8 Mbit window / 49,152 bits per frame); the real
+#: window is always derived from the artifact's config, never assumed.
+DEFAULT_K_VALUES = (10, 25, 50, 100, 162)
 
-DEFAULT_K_VALUES = (10, 25, 50, 100, FRAMES_PER_WINDOW)
+
+def derive_window(cfg: dict) -> dict | None:
+    """Window size from the artifact's own downlink config, arithmetic included.
+
+    Returns None when the config declares no downlink budget -- the headline
+    then says so instead of inventing a window.
+    """
+    downlink = cfg.get("downlink", {}) or {}
+    budget_bits = downlink.get("budget_bits_per_window")
+    if not budget_bits:
+        return None
+    frame_shape = tuple((cfg.get("transform", {}) or {}).get("frame_shape", (64, 64, 6)))
+    try:
+        frames, bits_per_frame, derivation = frames_per_window(
+            float(budget_bits),
+            frame_shape,
+            bits_per_sample=int(downlink.get("bits_per_sample", 8)),
+            compression_ratio=float(downlink.get("compression_ratio", 4.0)),
+        )
+    except ValueError as exc:
+        log.warning("cannot derive a downlink window from the config: %s", exc)
+        return None
+    return {
+        "frames": frames,
+        "budget_bits": float(budget_bits),
+        "bits_per_frame": bits_per_frame,
+        "derivation": derivation,
+    }
 
 
 def _score_split(model, split_name: str, chunk_size: int = 512) -> tuple[np.ndarray, list]:
@@ -284,7 +319,13 @@ def main(argv: list[str] | None = None) -> int:
     eval_cfg = cfg.get("eval", {})
     typical_split = args.typical_split or eval_cfg.get("typical_split", "test_typical")
     novel_split = args.novel_split or eval_cfg.get("novel_split", "test_novel_all")
-    k_values = args.k or eval_cfg.get("k_values") or list(DEFAULT_K_VALUES)
+    k_values = list(args.k or eval_cfg.get("k_values") or DEFAULT_K_VALUES)
+
+    # The operational k comes from the config's own downlink budget. Whatever
+    # the k list says, the derived window is always evaluated.
+    window = derive_window(cfg)
+    if window and window["frames"] not in k_values:
+        k_values.append(window["frames"])
 
     if novel_split == SPLIT_NOVEL_BYCLASS:
         log.error(
@@ -359,7 +400,15 @@ def main(argv: list[str] | None = None) -> int:
         "evaluated_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "typical_split": typical_split,
         "novel_split": novel_split,
-        "metrics": result.to_json(),
+        "window": window,
+        "metrics": {
+            # The operational figure leads the metrics block by design.
+            "precision_at_window": (
+                result.precision_at_k.get(window["frames"]) if window else None
+            ),
+            "window_frames": window["frames"] if window else None,
+            **result.to_json(),
+        },
         "decomposed": decomposed,
         "per_class_roc_auc": per_class,
         "reference": {
@@ -402,8 +451,19 @@ def main(argv: list[str] | None = None) -> int:
           f"  |  chance = {result.novel_rate:.3f}")
     print()
     print("  HEADLINE - operational (what actually gets downlinked)")
+    if window:
+        w = window["frames"]
+        print(f"    downlink window   = {window['derivation']}")
+        print(
+            f"    precision@window  = {result.precision_at_k[w]:.4f}"
+            f"   (recall {result.recall_at_k[w]:.4f}) at k={w}"
+        )
+    else:
+        print("    (config declares no downlink.budget_bits_per_window; no window to derive)")
+    print()
+    print("  k-CURVE - top-of-ranking diagnostics, NOT operational figures")
     for k in sorted(result.precision_at_k):
-        marker = "  <- one downlink window" if k == FRAMES_PER_WINDOW else ""
+        marker = "  <- the operational point" if window and k == window["frames"] else ""
         print(
             f"    precision@{k:<4d}      {result.precision_at_k[k]:.4f}"
             f"   (recall {result.recall_at_k[k]:.4f}){marker}"

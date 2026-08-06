@@ -6,19 +6,27 @@
   "config_hash": "cfb40ed216f4a7a83316535603b4a1549535ae9c6c47aa41d77e4dd284ac526f",
   "content_sha256": "8f22bd271ac08e21c2b9a001ad1a52b351594b2b6b2d0b5baf93b4d8ff83da06",
   "artifact": "artifacts/rad750.npz",
-  "git_commit": "89e959ab7cb2839d2273c32344179beba93e9097",
+  "git_commit": "08bb4770ac43fa7fe365b24070bb560fb1dabd88",
   "git_branch": "main",
   "git_dirty": true,
   "kind": "evaluation",
   "artifact_sha256": "23fb47de7fd88c234412104839444f314ead8c0c6f983ab3a42e1d8b442c13d9",
-  "evaluated_utc": "2026-08-06T10:54:01Z",
+  "evaluated_utc": "2026-08-06T11:46:12Z",
   "typical_split": "test_typical",
   "novel_split": "test_novel_all",
+  "window": {
+    "frames": 162,
+    "budget_bits": 8000000.0,
+    "bits_per_frame": 49152.0,
+    "derivation": "8,000,000 bits / 49,152 bits/frame (64x64x6 x 8b / 4x compression) = 162 frames"
+  },
   "metrics": {
+    "precision_at_window": 0.6975308641975309,
+    "window_frames": 162,
     "n_typical": 426,
     "n_novel": 430,
-    "roc_auc": 0.6385304072496998,
-    "average_precision": 0.634799502553069,
+    "roc_auc": 0.6385413254722131,
+    "average_precision": 0.6348032350459808,
     "precision_at_k": {
       "10": 0.9,
       "25": 0.8,
@@ -62,7 +70,7 @@
     },
     "rover": {
       "n": 261,
-      "roc_auc": 0.4778569244329322
+      "roc_auc": 0.47787491230910367
     },
     "excluded": {
       "n": 0,
@@ -85,7 +93,7 @@
     },
     "drt": {
       "n": 111,
-      "roc_auc": 0.42327538806412046
+      "roc_auc": 0.42331768388106417
     },
     "dump-pile": {
       "n": 93,

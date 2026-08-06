@@ -42,6 +42,9 @@ compute:
 downlink:
   bits_per_sample: 8
   compression_ratio: 4.0
+  # 983,040 bits / 49,152 bits per frame = a 20-frame window: evaluate must
+  # derive that k, append it to the k list, and headline precision@20.
+  budget_bits_per_window: 983040
 """
 
 AE_CONFIG = """
@@ -158,9 +161,20 @@ def test_evaluate_reports_roc_auc_and_writes_metrics(
     assert 0.0 <= record["metrics"]["roc_auc"] <= 1.0
     assert record["metrics"]["n_typical"] == 40
     assert record["metrics"]["n_novel"] == 30
-    assert set(record["metrics"]["precision_at_k"]) == {"5", "10"}
+    # The config's k list plus the window k derived from its downlink budget.
+    assert set(record["metrics"]["precision_at_k"]) == {"5", "10", "20"}
     assert record["reference"]["roc_auc"] == 0.65
     assert record["novel_split"] == "test_novel_all"
+
+    # precision@window: derived (983,040 / 49,152 = 20), shown with arithmetic,
+    # and surfaced as the leading metric in the sidecar JSON.
+    assert record["window"]["frames"] == 20
+    assert "983,040" in record["window"]["derivation"]
+    assert "= 20 frames" in record["window"]["derivation"]
+    assert record["metrics"]["precision_at_window"] == (
+        record["metrics"]["precision_at_k"]["20"]
+    )
+    assert list(record["metrics"])[0] == "precision_at_window"
 
     # Published alongside the committed weights.
     assert (paths.artifacts_dir() / "metrics" / "testtier.json").exists()

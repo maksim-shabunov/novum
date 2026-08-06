@@ -285,6 +285,41 @@ def estimate_frame_bits(
     return float(n_samples * bits_per_sample / compression_ratio)
 
 
+def frames_per_window(
+    budget_bits_per_window: float,
+    frame_shape: Sequence[int] = (64, 64, 6),
+    *,
+    bits_per_sample: int = 8,
+    compression_ratio: float = 4.0,
+) -> tuple[int, float, str]:
+    """How many frames one downlink window carries, with the arithmetic shown.
+
+    Returns (frames, bits_per_frame, derivation string). The derivation string
+    exists because this number is the operational headline of every report --
+    a reader must be able to see where "162" comes from, not take it on faith:
+
+        8,000,000 bits / 49,152 bits/frame (64x64x6 x 8b / 4.0x) = 162 frames
+    """
+    if budget_bits_per_window is None or budget_bits_per_window <= 0:
+        raise ValueError(f"budget_bits_per_window must be positive, got {budget_bits_per_window}")
+    bits = estimate_frame_bits(
+        frame_shape, bits_per_sample=bits_per_sample, compression_ratio=compression_ratio
+    )
+    frames = int(budget_bits_per_window // bits)
+    if frames < 1:
+        raise ValueError(
+            f"window of {budget_bits_per_window:,.0f} bits cannot carry even one "
+            f"{bits:,.0f}-bit frame"
+        )
+    shape_txt = "x".join(str(int(s)) for s in frame_shape)
+    derivation = (
+        f"{budget_bits_per_window:,.0f} bits / {bits:,.0f} bits/frame "
+        f"({shape_txt} x {bits_per_sample}b / {compression_ratio:g}x compression) "
+        f"= {frames} frames"
+    )
+    return frames, bits, derivation
+
+
 def estimate_bits_from_frames(
     frames: np.ndarray,
     *,
