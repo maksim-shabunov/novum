@@ -1,19 +1,19 @@
 {
   "name": "rad750",
   "artifact": "artifacts/rad750.npz",
-  "artifact_sha256": "961dc8087bbc103e91272074e0373a40eea115742144a45af5b378bbccd4be88",
+  "artifact_sha256": "65c60c1fb3d9e9dc818232f5d1d59c8486744addb5edceeabe1d9f377ffb78af",
   "model_type": "pca",
   "tier": "rad750",
   "config_hash": "05cbde0549919232095cb39323a20795db9bfc9713eb58da971732fc435fd573",
-  "git_commit": "2cfb82ccb8645b09191a3fd0f05a717b2f2aef1b",
-  "evaluated_utc": "2026-08-06T07:41:24Z",
+  "git_commit": "e9b4e958bd2a76060d3b4bf4cf74d2e4f5f4b60c",
+  "evaluated_utc": "2026-08-06T09:19:44Z",
   "typical_split": "test_typical",
   "novel_split": "test_novel_all",
   "metrics": {
     "n_typical": 426,
     "n_novel": 430,
-    "roc_auc": 0.6385413254722131,
-    "average_precision": 0.6348032350459808,
+    "roc_auc": 0.6385304072496998,
+    "average_precision": 0.634799502553069,
     "precision_at_k": {
       "10": 0.9,
       "25": 0.8,
@@ -44,7 +44,7 @@
     },
     "drt": {
       "n": 111,
-      "roc_auc": 0.42331768388106417
+      "roc_auc": 0.42327538806412046
     },
     "dump-pile": {
       "n": 93,

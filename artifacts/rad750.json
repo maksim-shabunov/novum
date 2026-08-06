@@ -2,23 +2,23 @@
   "name": "rad750",
   "tier": "rad750",
   "config_hash": "05cbde0549919232095cb39323a20795db9bfc9713eb58da971732fc435fd573",
-  "git_commit": "2cfb82ccb8645b09191a3fd0f05a717b2f2aef1b",
+  "git_commit": "e9b4e958bd2a76060d3b4bf4cf74d2e4f5f4b60c",
   "git_dirty": true,
   "git_branch": "main",
-  "wall_clock_seconds": 16.944,
+  "wall_clock_seconds": 51.009,
   "param_count": 399372,
   "flops_per_inference": 866432,
-  "peak_rss_bytes": 1638727680,
-  "peak_rss_mib": 1562.8,
+  "peak_rss_bytes": 1456717824,
+  "peak_rss_mib": 1389.2,
   "n_train_samples": 9302,
   "seed": 0,
-  "created_utc": "2026-08-06T07:41:24Z",
+  "created_utc": "2026-08-06T09:19:42Z",
   "environment": {
-    "python": "3.13.12",
-    "numpy": "2.5.1",
-    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
-    "machine": "arm64",
-    "cpu_count": 14,
+    "python": "3.12.3",
+    "numpy": "2.2.6",
+    "platform": "Linux-6.8.0-100-generic-x86_64-with-glibc2.39",
+    "machine": "x86_64",
+    "cpu_count": 20,
     "device": "cpu"
   },
   "config": {
@@ -72,6 +72,6 @@
   },
   "extra": {
     "train_split": "train_typical",
-    "artifact_bytes": 1477731
+    "artifact_bytes": 1477732
   }
 }
