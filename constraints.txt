@@ -1,0 +1,52 @@
+# =============================================================================
+# NOVUM pinned dependency set.
+#
+# `make setup` installs with `pip install -c constraints.txt`, so a run today
+# and a run in three weeks resolve to the same versions.
+#
+# WHY THESE VERSIONS AND NOT THE LATEST
+# -------------------------------------
+# Every pin here is the newest release that supports the FULL Python range this
+# project claims (3.10 through 3.13) with binary wheels at both ends. That
+# matters because Ubuntu 22.04 ships Python 3.10 and Ubuntu 24.04 ships 3.12,
+# and bootstrap.sh supports both. Pinning the actual latest would silently
+# break 22.04:
+#
+#   numpy        latest 2.5.x   requires >= 3.12   -> pinned 2.2.6
+#   pandas       latest 3.0.x   requires >= 3.11   -> pinned 2.3.3
+#   scikit-learn latest 1.9.x   requires >= 3.11   -> pinned 1.7.2
+#
+# torch is pinned to a release with manylinux x86_64 AND aarch64 CPU wheels for
+# cp310-cp313, so `make setup` never falls back to building from source. It is
+# installed from https://download.pytorch.org/whl/cpu -- the pin below matches
+# the local version 2.9.1+cpu, since PEP 440 `==2.9.1` accepts `2.9.1+cpu`.
+#
+# SCOPE: these are the direct dependencies. Transitive versions still float.
+# For a fully reproducible set including transitives, run `make lock` ON THE
+# TARGET MACHINE -- a lockfile is platform and interpreter specific, so one
+# generated elsewhere would be wrong here.
+#
+# To refresh: bump a pin, run `make setup && make test`, commit both files.
+# =============================================================================
+
+# --- core: imported by BOTH the training and serving layers ------------------
+numpy==2.2.6
+PyYAML==6.0.3
+
+# --- data: preprocessing and the sweep table ---------------------------------
+pandas==2.3.3
+pyarrow==25.0.0
+
+# --- train: NEVER installed into the API image -------------------------------
+torch==2.9.1
+scikit-learn==1.7.2
+
+# --- serve: NEVER pulls a training dependency --------------------------------
+fastapi==0.141.1
+uvicorn==0.52.1
+python-dotenv==1.2.2
+pydantic==2.13.4
+
+# --- dev ---------------------------------------------------------------------
+pytest==9.1.1
+ruff==0.16.1

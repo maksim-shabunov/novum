@@ -1,0 +1,109 @@
+# =============================================================================
+# NOVUM compose stack.
+#
+#   docker compose -f docker/docker-compose.yml up --build api
+#   docker compose -f docker/docker-compose.yml --profile train run --rm train
+#
+# The api service mounts artifacts/ READ-ONLY. Serving must never be able to
+# modify a trained artifact, and the mount enforces it rather than trusting the
+# application not to try.
+#
+# REQUIRES Docker Compose v2.24+ for `env_file: ... required: false`, which is
+# what lets the stack start without a .env file present. On older Compose,
+# either create an empty .env or replace each env_file block with `- ../.env`.
+# =============================================================================
+
+name: novum
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    image: novum-api:latest
+    container_name: novum-api
+    restart: unless-stopped
+    ports:
+      - "${NOVUM_API_PORT:-8000}:8000"
+    environment:
+      NOVUM_API_HOST: "0.0.0.0"
+      NOVUM_API_PORT: "8000"
+      NOVUM_LOG_LEVEL: "${NOVUM_LOG_LEVEL:-INFO}"
+      NOVUM_ALLOWED_ORIGINS: "${NOVUM_ALLOWED_ORIGINS:-}"
+      NOVUM_DEFAULT_ARTIFACT: "${NOVUM_DEFAULT_ARTIFACT:-rad750.npz}"
+      # Secrets come from .env or the host environment, never from this file.
+      NOVUM_API_KEY: "${NOVUM_API_KEY:-}"
+    env_file:
+      - path: ../.env
+        required: false
+    volumes:
+      # Read-only: the API consumes artifacts, it does not produce them.
+      - ../artifacts:/app/artifacts:ro
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status == 200 else 1)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks: [novum]
+
+  # Offline training. Not started by `up`; run it explicitly:
+  #   docker compose -f docker/docker-compose.yml --profile train run --rm train
+  train:
+    profiles: ["train"]
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.train
+    image: novum-train:latest
+    container_name: novum-train
+    environment:
+      NOVUM_LOG_LEVEL: "${NOVUM_LOG_LEVEL:-INFO}"
+      NOVUM_PLAIN_PROGRESS: "1"
+    env_file:
+      - path: ../.env
+        required: false
+    volumes:
+      # Read-write: training downloads data and produces artifacts.
+      - ../data:/app/data
+      - ../artifacts:/app/artifacts
+      - ../runs:/app/runs
+    networks: [novum]
+
+  # ---------------------------------------------------------------------------
+  # Caddy: automatic HTTPS in front of the API. Uncomment when a domain exists.
+  #
+  # Also create docker/Caddyfile:
+  #     novum.example.com {
+  #         reverse_proxy api:8000
+  #     }
+  #
+  # Then drop the api service's `ports:` block so it is reachable only through
+  # Caddy, and point NOVUM_ALLOWED_ORIGINS at the public origin.
+  # ---------------------------------------------------------------------------
+  # caddy:
+  #   image: caddy:2-alpine
+  #   container_name: novum-caddy
+  #   restart: unless-stopped
+  #   depends_on:
+  #     api:
+  #       condition: service_healthy
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #     - "443:443/udp"
+  #   volumes:
+  #     - ./Caddyfile:/etc/caddy/Caddyfile:ro
+  #     - caddy_data:/data
+  #     - caddy_config:/config
+  #   networks: [novum]
+
+networks:
+  novum:
+    driver: bridge
+# volumes:
+#   caddy_data:
+#   caddy_config:

@@ -1,0 +1,77 @@
+{
+  "name": "rad750",
+  "tier": "rad750",
+  "config_hash": "05cbde0549919232095cb39323a20795db9bfc9713eb58da971732fc435fd573",
+  "git_commit": "2cfb82ccb8645b09191a3fd0f05a717b2f2aef1b",
+  "git_dirty": true,
+  "git_branch": "main",
+  "wall_clock_seconds": 16.944,
+  "param_count": 399372,
+  "flops_per_inference": 866432,
+  "peak_rss_bytes": 1638727680,
+  "peak_rss_mib": 1562.8,
+  "n_train_samples": 9302,
+  "seed": 0,
+  "created_utc": "2026-08-06T07:41:24Z",
+  "environment": {
+    "python": "3.13.12",
+    "numpy": "2.5.1",
+    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "cpu_count": 14,
+    "device": "cpu"
+  },
+  "config": {
+    "tier": "rad750",
+    "description": "PCA reconstruction-error novelty detection at RAD750 scale. Scoring one frame is a single k x D matrix-vector product against the principal subspace of previously-seen typical terrain.\n",
+    "seed": 0,
+    "model": {
+      "type": "pca",
+      "n_components": 64,
+      "score": "recon_l2",
+      "oversamples": 16,
+      "power_iterations": 2
+    },
+    "transform": {
+      "scale": 255.0,
+      "downsample": 2,
+      "standardize": "per_band",
+      "frame_shape": [
+        64,
+        64,
+        6
+      ]
+    },
+    "data": {
+      "train_split": "train_typical",
+      "max_train_samples": null,
+      "chunk_size": 512
+    },
+    "eval": {
+      "typical_split": "test_typical",
+      "novel_split": "test_novel_all",
+      "k_values": [
+        10,
+        25,
+        50,
+        100
+      ],
+      "per_class": true
+    },
+    "compute": {
+      "reference_processor": "BAE RAD750 @ 200 MHz, no SIMD (~200 MIPS)",
+      "cycles_per_flop": 3.0,
+      "budget_cycles_per_frame": 20000000
+    },
+    "downlink": {
+      "bits_per_sample": 8,
+      "compression_ratio": 4.0,
+      "budget_bits_per_window": 8000000
+    },
+    "_source": "configs/tier_rad750.yaml"
+  },
+  "extra": {
+    "train_split": "train_typical",
+    "artifact_bytes": 1477731
+  }
+}

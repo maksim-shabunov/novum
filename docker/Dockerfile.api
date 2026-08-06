@@ -1,0 +1,61 @@
+# =============================================================================
+# NOVUM serving image -- slim.
+#
+# Contains FastAPI, uvicorn, numpy and pyyaml. NO torch. NO scikit-learn.
+# NO pandas. That is the core architectural rule of this project, and the
+# build asserts it below rather than trusting a comment.
+#
+#   docker build -f docker/Dockerfile.api -t novum-api ..
+#   docker run --rm -p 8000:8000 -v "$PWD/artifacts:/app/artifacts:ro" novum-api
+# =============================================================================
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    NOVUM_API_HOST=0.0.0.0 \
+    NOVUM_API_PORT=8000
+
+WORKDIR /app
+
+COPY pyproject.toml constraints.txt README.md ./
+COPY core ./core
+COPY api ./api
+COPY sim ./sim
+COPY scripts ./scripts
+COPY configs ./configs
+
+# `.[serve]` deliberately excludes the train and data extras. constraints.txt
+# pins versions but does NOT cause installation -- naming torch there has no
+# effect unless something actually depends on it, and nothing here does.
+RUN pip install -c constraints.txt ".[serve]"
+
+# -----------------------------------------------------------------------------
+# Dependency guard. If a training dependency ever becomes reachable from the
+# serving layer, this build fails here instead of shipping a 2 GB API image.
+# Mirrors tests/test_no_training_deps.py.
+# -----------------------------------------------------------------------------
+RUN python - <<'PY'
+import importlib.util, sys
+banned = ("torch", "sklearn", "scipy", "pandas", "pyarrow", "matplotlib")
+leaked = [m for m in banned if importlib.util.find_spec(m) is not None]
+if leaked:
+    sys.exit(f"FAIL: training dependencies leaked into the API image: {leaked}")
+import api.main  # noqa: F401
+assert "torch" not in sys.modules, "importing api.main pulled in torch"
+print("dependency guard ok: no training stack in the serving image")
+PY
+
+# Artifacts are mounted read-only at runtime; the directory must exist either way.
+RUN mkdir -p /app/artifacts /app/runs \
+    && useradd --create-home --uid 10001 novum \
+    && chown -R novum:novum /app
+USER novum
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status == 200 else 1)"
+
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]

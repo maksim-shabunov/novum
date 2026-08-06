@@ -1,0 +1,26 @@
+# Keep the build context small. Without this, `docker build` would upload the
+# ~3 GB of data/ before running a single instruction.
+data/
+runs/
+.venv/
+venv/
+.git/
+.github/
+web/node_modules/
+
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+.env
+*.part
+*.tmp
+.DS_Store
+
+# artifacts/ is intentionally NOT ignored: the API image serves the committed
+# weights, and docker-compose also mounts the directory read-only at runtime.

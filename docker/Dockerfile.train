@@ -1,0 +1,50 @@
+# =============================================================================
+# NOVUM training image -- heavy.
+#
+# Contains the full training stack (torch CPU, scikit-learn, pandas, pyarrow).
+# This image trains and writes artifacts; it never serves traffic.
+#
+#   docker build -f docker/Dockerfile.train -t novum-train ..
+#   docker run --rm -v "$PWD/data:/app/data" -v "$PWD/artifacts:/app/artifacts" novum-train
+#
+# CPU-ONLY BY CONTRACT. torch comes from the CPU wheel index, so no CUDA
+# runtime is ever pulled in and the image runs unchanged on any x86_64 or
+# arm64 host.
+# =============================================================================
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    # Line-buffered progress instead of carriage-return bars: docker logs and
+    # tmux capture-pane are both unreadable otherwise.
+    NOVUM_PLAIN_PROGRESS=1
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Dependency layer first so source edits do not re-download torch.
+# constraints.txt is the same pin set `make setup` uses, so the image and a
+# host install resolve to identical versions.
+COPY pyproject.toml constraints.txt README.md ./
+COPY core ./core
+COPY scripts ./scripts
+COPY sim ./sim
+COPY api ./api
+COPY configs ./configs
+
+RUN pip install --index-url https://download.pytorch.org/whl/cpu -c constraints.txt torch \
+    && pip install -c constraints.txt -e ".[train,serve]"
+
+# Mount points. Nothing here is baked into the image.
+VOLUME ["/app/data", "/app/artifacts", "/app/runs"]
+
+# Fail fast if the image cannot import its own code.
+RUN python -c "import core, scripts, sim; print('novum training image ok')"
+
+# Default: the whole offline pipeline, unattended.
+CMD ["sh", "-c", "python -m scripts.fetch_data && python -m scripts.preprocess && python -m scripts.train --config configs/tier_rad750.yaml --out artifacts/rad750.npz && python -m scripts.evaluate --artifact artifacts/rad750.npz"]

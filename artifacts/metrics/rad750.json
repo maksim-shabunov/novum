@@ -1,0 +1,86 @@
+{
+  "name": "rad750",
+  "artifact": "artifacts/rad750.npz",
+  "artifact_sha256": "961dc8087bbc103e91272074e0373a40eea115742144a45af5b378bbccd4be88",
+  "model_type": "pca",
+  "tier": "rad750",
+  "config_hash": "05cbde0549919232095cb39323a20795db9bfc9713eb58da971732fc435fd573",
+  "git_commit": "2cfb82ccb8645b09191a3fd0f05a717b2f2aef1b",
+  "evaluated_utc": "2026-08-06T07:41:24Z",
+  "typical_split": "test_typical",
+  "novel_split": "test_novel_all",
+  "metrics": {
+    "n_typical": 426,
+    "n_novel": 430,
+    "roc_auc": 0.6385413254722131,
+    "average_precision": 0.6348032350459808,
+    "precision_at_k": {
+      "10": 0.9,
+      "25": 0.8,
+      "50": 0.7,
+      "100": 0.72
+    },
+    "recall_at_k": {
+      "10": 0.020930232558139535,
+      "25": 0.046511627906976744,
+      "50": 0.08139534883720931,
+      "100": 0.16744186046511628
+    },
+    "novel_rate": 0.5023364485981309,
+    "per_class_roc_auc": {}
+  },
+  "per_class_roc_auc": {
+    "bedrock": {
+      "n": 11,
+      "roc_auc": 0.8369611609048229
+    },
+    "broken-rock": {
+      "n": 76,
+      "roc_auc": 0.9141030392883618
+    },
+    "drill-hole": {
+      "n": 62,
+      "roc_auc": 0.5991216113887626
+    },
+    "drt": {
+      "n": 111,
+      "roc_auc": 0.42331768388106417
+    },
+    "dump-pile": {
+      "n": 93,
+      "roc_auc": 0.46340047453177846
+    },
+    "edge_cases": {
+      "n": 3,
+      "roc_auc": 0.6251956181533647
+    },
+    "float": {
+      "n": 18,
+      "roc_auc": 0.8810641627543035
+    },
+    "meteorite": {
+      "n": 34,
+      "roc_auc": 0.7964650648991991
+    },
+    "other": {
+      "n": 1,
+      "roc_auc": 0.27230046948356806
+    },
+    "scuff": {
+      "n": 12,
+      "roc_auc": 0.6652973395931142
+    },
+    "veins": {
+      "n": 30,
+      "roc_auc": 0.9410015649452269
+    }
+  },
+  "reference": {
+    "roc_auc": 0.65,
+    "source": "Kerner et al. 2020, conv autoencoder on Mastcam novelty (ROC AUC 0.65)"
+  },
+  "cost": {
+    "param_count": 399372,
+    "flops_per_inference": 866432
+  }
+}
