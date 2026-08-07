@@ -41,10 +41,11 @@ PIP_C       := $(if $(wildcard $(CONSTRAINTS)),-c $(CONSTRAINTS),)
 STRICT      ?=
 DOCTOR_ARGS := $(if $(STRICT),--strict,)
 
+RUNS_SIM_ONLINE ?= runs/sim/online-latest
 COMPOSE     ?= docker compose -f docker/docker-compose.yml
 
 .PHONY: help bootstrap doctor setup data fetch preprocess train sweep eval serve \
-        test lint fmt lock docker-train docker-serve docker-build docker-down \
+        test lint fmt lock simulate simulate-sweep report docker-train docker-serve docker-build docker-down \
         clean clean-data clean-venv guard-venv check-python check-deps
 
 help: ## Show this help
@@ -133,6 +134,15 @@ sweep: guard-venv ## Run the full (tier x seed) matrix, unattended
 
 report: guard-venv ## Regenerate results/RESULTS.md from stored sweep metrics (no retraining)
 	$(PY) -m scripts.report
+
+simulate: guard-venv ## Replay the mission under both budgets (default tier, all methods)
+	$(PY) -m scripts.simulate --artifact $(ARTIFACT)
+
+simulate-sweep: guard-venv ## Simulate every tier x every method, frozen and online
+	$(PY) -m scripts.simulate --all-tiers
+	$(PY) -m scripts.simulate --adaptation online \
+		--results-file results/SIMULATION_online.md \
+		--out-dir $(RUNS_SIM_ONLINE)
 
 eval: guard-venv ## Evaluate the current artifact and print ROC AUC
 	$(PY) -m scripts.evaluate --artifact $(ARTIFACT)

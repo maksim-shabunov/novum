@@ -75,7 +75,7 @@ flowchart TB
     subgraph online["ONLINE — serving (slim deps: fastapi, numpy)"]
         direction TB
         API["api/ — FastAPI"]
-        SIM["sim/ — downlink simulator<br/><i>stub</i>"]
+        SIM["sim/ — downlink simulator<br/><i>mission replay</i>"]
         WEB["web/ — frontend<br/><i>not scaffolded</i>"]
         API --> WEB
         SIM --> API
@@ -327,6 +327,61 @@ terrain the mission already knows about. A triage system near chance on those
 classes is arguably *filtering* them, which is desirable downlink behaviour.
 The decomposition exists so that argument can be made (or attacked) with
 numbers instead of an aggregate that hides it.
+
+---
+
+## The mission simulation
+
+The static tables score a frame against the *training set*. The simulator asks
+the question the rover actually faces — is this frame unlike what has been seen
+**so far** — by replaying all 856 frames in sol order across 27 downlink
+windows, under both budgets at once. Full results in
+[`results/SIMULATION.md`](results/SIMULATION.md); `make simulate` reproduces
+them in under a second from committed artifacts.
+
+| method | science yield | wasted bits | what it is |
+|---|---|---|---|
+| fifo | 0.154 | 0.325 | transmit in capture order — non-intelligent operations |
+| random | 0.219 | 0.286 | the floor |
+| greedy_ratio | 0.521 | 0.195 | novelty per bit |
+| **score_first** | **0.556** | 0.160 | pure novelty ranking — the best onboard policy |
+| *oracle* | *0.633* | *0.081* | *reads the labels; unachievable upper bound* |
+
+**Science yield** = of the 169 natural-class novel frames the rover captured,
+the fraction that reached the ground, at an identical bit budget (25% of what
+is captured, ~7.9 frames per window).
+
+**NOVUM delivers 3.6× the science of FIFO** (+262%) and closes 84% of the
+distance to a label-reading oracle. It also spends half the downlink share on
+rover-made housekeeping that FIFO does (0.160 vs 0.325).
+
+Three things the replay exposes that the static evaluation cannot:
+
+1. **The tier ranking inverts.** rad750 wins the simulation (0.556) despite
+   myriad winning the static aggregate ROC AUC. Science yield depends only on
+   ranking *natural* frames, and all three tiers are statistically identical
+   there (0.887–0.889) — so the cheapest model wins on the metric that matters
+   operationally, and the autoencoders' advantage on rover-made classes buys
+   nothing here.
+2. **The compute budget bites, and unequally.** The cycle budget affords ~32
+   full scores per window against a buffer of 80–180 frames, so a cheap
+   prefilter decides what is even worth scoring. At rad750 scale that prefilter
+   costs 14% of a full score and 1,019 frame-windows go unscored; at myriad
+   scale it costs 1.3% and only 632 do. A cheaper model does not automatically
+   mean more frames examined.
+3. **Chronological replay costs accuracy, as predicted.** Switching from
+   `frozen` to `online` (bootstrap on early sols, refit from what has actually
+   been seen, no labels) drops science yield 0.556 → **0.462**. The frozen
+   model is optimistic by construction — `train_typical` spans the whole
+   mission including sols the rover has not reached. The drop is the honest
+   number, in [`results/SIMULATION_online.md`](results/SIMULATION_online.md).
+
+Design decisions, and where they are argued: unselected frames are **retained**
+in an age-limited buffer (200 sols) and expiries are counted, never silent;
+ground-truth feedback is **off** by default because there is no ground truth
+onboard (`--ground-feedback` measures what a trickle of expert supervision is
+worth — it scored 0.444, slightly *below* plain online, well within noise at
+~180 labelled frames). See `sim/window.py`.
 
 ---
 
@@ -656,19 +711,20 @@ constraints.txt  pinned direct dependencies (Python 3.10–3.13 compatible)
 artifacts/       trained weights + sidecars + metrics — COMMITTED
 data/            raw and processed — gitignored
 runs/            logs, sweep output, metrics — gitignored
-sim/             downlink window simulator — replay() is a stub
+sim/             downlink window simulator: mission stream, prefilter,
+                 selection policies, replay loop
 api/             FastAPI — artifact endpoints live, scoring returns 501
 web/             placeholder, not scaffolded
 docker/          Dockerfile.train, Dockerfile.api, docker-compose.yml
-results/         RESULTS.md — the per-tier comparison table, committed
+results/         RESULTS.md + SIMULATION.md — committed evidence tables
 tests/           207 tests: dependency separation, double counting, memory
                  bounds, AE determinism, taxonomy decomposition
 ```
 
 ## What is still a stub
 
-- `sim/window.py` — `replay()`; `plan_windows` and `chronological_order` are real
-- `api/main.py` — `POST /api/score` and `GET /api/simulate` return 501
+- `api/main.py` — `POST /api/score` and `GET /api/simulate` return 501. The
+  simulator itself is implemented (`make simulate`); only its HTTP surface is not.
 - `web/` — empty by intent
 
 The model tiers are no longer stubs: all three train, evaluate and ship
@@ -697,6 +753,7 @@ to notice:
 | `test_bootstrap_and_doctor.py` | `doctor.py` stays stdlib-only and old-Python parseable |
 | `test_conv_ae.py` | same seed ⇒ identical weights (`content_sha256` equality) |
 | `test_taxonomy_and_decomposition.py` | excluded classes are never folded into a group |
+| `test_simulator.py` | both budgets bind; the oracle really is an upper bound |
 
 ## License
 

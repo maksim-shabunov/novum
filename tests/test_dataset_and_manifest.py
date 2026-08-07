@@ -175,6 +175,12 @@ def test_plan_windows_on_no_rows() -> None:
     assert plan_windows([]) == []
 
 
-def test_replay_is_a_marked_stub() -> None:
-    with pytest.raises(NotImplementedError, match="not implemented yet"):
-        replay(np.zeros((1, 64, 64, 6), dtype=np.float32), [], model=None)
+def test_replay_rejects_an_unknown_policy() -> None:
+    """replay() is implemented now (see tests/test_simulator.py); this only
+    guards that a typo in the policy name fails loudly at the boundary."""
+    from sim.mission import MissionStream
+    from sim.window import SimConfig
+
+    empty = MissionStream(frames=[], array=np.zeros((0, 64, 64, 6), dtype=np.float32), rows=[])
+    with pytest.raises(ValueError, match="unknown method"):
+        replay(empty, model=None, method="telepathy", config=SimConfig())
