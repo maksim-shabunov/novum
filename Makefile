@@ -29,6 +29,7 @@ SEEDS       ?= 0,1,2
 CONFIG      ?= configs/tier_$(TIER).yaml
 ARTIFACT    ?= artifacts/$(TIER).npz
 
+HARDWARE    ?= rad750
 HOST        ?= 127.0.0.1
 PORT        ?= 8000
 
@@ -45,7 +46,7 @@ RUNS_SIM_ONLINE ?= runs/sim/online-latest
 COMPOSE     ?= docker compose -f docker/docker-compose.yml
 
 .PHONY: help bootstrap doctor setup data fetch preprocess train sweep eval serve \
-        test lint fmt lock simulate simulate-sweep report docker-train docker-serve docker-build docker-down \
+        test lint fmt lock simulate simulate-quick simulate-fixed-hw simulate-sweep report docker-train docker-serve docker-build docker-down \
         clean clean-data clean-venv guard-venv check-python check-deps
 
 help: ## Show this help
@@ -135,11 +136,19 @@ sweep: guard-venv ## Run the full (tier x seed) matrix, unattended
 report: guard-venv ## Regenerate results/RESULTS.md from stored sweep metrics (no retraining)
 	$(PY) -m scripts.report
 
-simulate: guard-venv ## Replay the mission under both budgets (default tier, all methods)
+simulate: guard-venv ## Replay the mission + all experiments -> results/SIMULATION.md
+	$(PY) -m scripts.simulate --all-tiers --experiments
+
+simulate-quick: guard-venv ## Baseline replay only, one tier (seconds)
 	$(PY) -m scripts.simulate --artifact $(ARTIFACT)
 
-simulate-sweep: guard-venv ## Simulate every tier x every method, frozen and online
-	$(PY) -m scripts.simulate --all-tiers
+simulate-fixed-hw: guard-venv ## Cost every model against one processor (HARDWARE=rad750)
+	$(PY) -m scripts.simulate --all-tiers --hardware $(HARDWARE) \
+		--methods score_first \
+		--results-file results/SIMULATION_fixed_$(HARDWARE).md
+
+simulate-sweep: guard-venv ## Full experiment suite plus the standalone online run
+	$(PY) -m scripts.simulate --all-tiers --experiments
 	$(PY) -m scripts.simulate --adaptation online \
 		--results-file results/SIMULATION_online.md \
 		--out-dir $(RUNS_SIM_ONLINE)

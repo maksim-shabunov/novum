@@ -217,7 +217,26 @@ class SimConfig:
     compress_flops_per_frame: int | None = None   # default: 2 ops per raw sample
     seed: int = 0
 
+    #: Name of the tier whose PROCESSOR every model is costed against. None
+    #: means each tier is costed against its own reference hardware -- which
+    #: makes every tier afford the same number of scores per window and cancels
+    #: the compute axis entirely. Set this to compare models on fixed hardware.
+    hardware: str | None = None
+
+    #: Score everything regardless of cycles: the perfect-prefilter upper bound.
+    #: Bits still bind, so the gap to the achieved yield isolates how much the
+    #: compute budget (not the downlink) is costing.
+    unlimited_compute: bool = False
+
+    #: variance | lowrank. See sim.prefilter.
+    prefilter_mode: str = "variance"
+    prefilter_components: int = 4
+
     def validate(self) -> SimConfig:
+        if self.prefilter_mode not in ("variance", "lowrank"):
+            raise ValueError(
+                f"prefilter_mode must be variance|lowrank, got {self.prefilter_mode!r}"
+            )
         if self.adaptation not in ADAPTATION_MODES:
             raise ValueError(
                 f"adaptation must be one of {ADAPTATION_MODES}, got {self.adaptation!r}"
@@ -301,6 +320,16 @@ class SimResult:
     precision_natural: float
     n_refits: int
     wall_clock_seconds: float
+    #: Unique natural frames that ever earned a real score, over those ever
+    #: buffered. 1.0 when the cycle budget never bound. Below 1.0, this is a
+    #: hard ceiling on science yield that no amount of downlink can lift.
+    prefilter_recall_natural: float = 1.0
+    n_natural_never_scored: int = 0
+    n_frames_never_scored: int = 0
+    prefilter_name: str = "variance"
+    cycles_per_score: float = 0.0
+    scores_affordable_per_window: float | None = None
+    hardware: str | None = None
 
     def to_json(self) -> dict:
         out = asdict(self)
@@ -316,12 +345,22 @@ def _derive_budgets(
     windows: list[DownlinkWindow],
     config: SimConfig,
     cycles_per_score: float,
+    budget_cycles_per_score: float | None = None,
 ) -> tuple[float, float, dict]:
-    """Per-window bit and cycle budgets, scaled to what actually arrives."""
+    """Per-window bit and cycle budgets, scaled to what actually arrives.
+
+    `budget_cycles_per_score` is what the HARDWARE was provisioned for, which is
+    not the same thing as what THIS model costs. Leave it None and every tier
+    gets a budget sized to its own model -- every tier then affords the same
+    number of scores and the compute axis cancels out. Pin it to one processor's
+    reference model and an expensive model simply affords fewer scores, which is
+    the trade-off the project exists to measure.
+    """
     n_windows = max(1, len(windows))
     bits_total = float(sum(f.bits for f in mission.frames))
     bits_per_window_arriving = bits_total / n_windows
     frames_per_window_arriving = len(mission) / n_windows
+    provisioning_cost = budget_cycles_per_score or cycles_per_score
 
     bits = (
         float(config.bits_per_window)
@@ -331,7 +370,7 @@ def _derive_budgets(
     cycles = (
         float(config.cycles_per_window)
         if config.cycles_per_window
-        else frames_per_window_arriving * cycles_per_score * config.compute_fraction
+        else frames_per_window_arriving * provisioning_cost * config.compute_fraction
     )
     derivation = {
         "n_windows": n_windows,
@@ -344,6 +383,8 @@ def _derive_budgets(
         "compute_fraction": config.compute_fraction,
         "frames_affordable_per_window": bits / (bits_total / len(mission)),
         "scores_affordable_per_window": cycles / cycles_per_score if cycles_per_score else None,
+        "provisioning_cycles_per_score": provisioning_cost,
+        "hardware": config.hardware,
     }
     return bits, cycles, derivation
 
@@ -367,6 +408,7 @@ def replay(
     method: str = "greedy_ratio",
     config: SimConfig | None = None,
     cycles_per_score: float | None = None,
+    budget_cycles_per_score: float | None = None,
     artifact: str = "",
     tier: str = "",
     windows: Iterable[DownlinkWindow] | None = None,
@@ -384,7 +426,10 @@ def replay(
     rng = np.random.default_rng(config.seed)
 
     frame_shape = mission.array.shape[1:]
-    prefilter_cycles = prefilter.prefilter_flops(frame_shape) * config.cycles_per_flop
+    prefilter_impl = prefilter.build_prefilter(
+        config.prefilter_mode, model, frame_shape, n_components=config.prefilter_components
+    )
+    prefilter_cycles = prefilter_impl.flops * config.cycles_per_flop
     compress_flops = config.compress_flops_per_frame or (2 * int(np.prod(frame_shape)))
     compress_cycles = compress_flops * config.cycles_per_flop
     if cycles_per_score is None:
@@ -394,7 +439,7 @@ def replay(
     if windows is None:
         planned = plan_windows(mission.rows, sols_per_window=config.sols_per_window)
         bits_budget, cycles_budget, derivation = _derive_budgets(
-            mission, planned, config, cycles_per_score
+            mission, planned, config, cycles_per_score, budget_cycles_per_score
         )
         windows = plan_windows(
             mission.rows,
@@ -428,6 +473,14 @@ def replay(
     total_bits_used = 0.0
     natural_seen = 0
     n_unscored_total = 0
+    # Mission-level triage accounting, in UNIQUE frames rather than
+    # frame-window pairs: of the natural frames that were ever buffered, how
+    # many ever earned a real score? A frame the prefilter never promotes can
+    # never be selected, no matter how much downlink is available.
+    natural_ever_buffered: set[int] = set()
+    natural_ever_scored: set[int] = set()
+    ever_buffered: set[int] = set()
+    ever_scored: set[int] = set()
     sent_indices: list[int] = []
 
     for window in windows:
@@ -485,7 +538,7 @@ def replay(
         cycles_prefilter = 0.0
         if new_stats:
             batch = mission.batch([c.frame.index for c in new_stats])
-            statistics = prefilter.frame_statistics(batch)
+            statistics = prefilter_impl.statistics(batch)
             ranked = prefilter.prefilter_rank(statistics, stats)
             stats.update(statistics)
             for item, value in zip(new_stats, ranked, strict=True):
@@ -501,16 +554,32 @@ def replay(
             unscored = [c for c in candidates if c.frame.index not in score_cache]
             # Best prefilter rank first: the whole point of triage.
             unscored.sort(key=lambda c: (-(c.prefilter or 0.0), c.frame.index))
-            affordable = int(max(0.0, cycles_left) // cycles_per_score) if cycles_per_score else len(unscored)
+            if config.unlimited_compute:
+                # The perfect-prefilter bound: everything gets a real score, so
+                # only the downlink can bind. The gap to the budgeted run is
+                # exactly what the compute budget costs.
+                affordable = len(unscored)
+            elif cycles_per_score:
+                affordable = int(max(0.0, cycles_left) // cycles_per_score)
+            else:
+                affordable = len(unscored)
             to_score = unscored[:affordable]
             n_unscored = len(unscored) - len(to_score)
             n_unscored_total += n_unscored
+
+            for item in candidates:
+                ever_buffered.add(item.frame.index)
+                if item.frame.is_natural:
+                    natural_ever_buffered.add(item.frame.index)
 
             if to_score:
                 batch = mission.batch([c.frame.index for c in to_score])
                 fresh = model.score(batch)
                 for item, value in zip(to_score, fresh, strict=True):
                     score_cache[item.frame.index] = float(value)
+                    ever_scored.add(item.frame.index)
+                    if item.frame.is_natural:
+                        natural_ever_scored.add(item.frame.index)
                 n_scored = len(to_score)
                 cycles_scoring = n_scored * cycles_per_score
                 cycles_left -= cycles_scoring
@@ -656,6 +725,17 @@ def replay(
         bits_used=total_bits_used,
         bits_available=bits_available,
         precision_natural=(sent_natural / n_sent) if n_sent else 0.0,
+        prefilter_recall_natural=(
+            len(natural_ever_scored) / len(natural_ever_buffered)
+            if natural_ever_buffered
+            else 1.0
+        ),
+        n_natural_never_scored=len(natural_ever_buffered - natural_ever_scored),
+        n_frames_never_scored=len(ever_buffered - ever_scored),
+        prefilter_name=prefilter_impl.name,
+        cycles_per_score=float(cycles_per_score),
+        scores_affordable_per_window=derivation.get("scores_affordable_per_window"),
+        hardware=config.hardware,
         n_refits=n_refits,
         wall_clock_seconds=round(time.perf_counter() - started, 3),
     )

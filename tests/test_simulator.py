@@ -333,6 +333,105 @@ def test_running_stats_are_causal() -> None:
 # ---------------------------------------------------------------------------
 # Window planning
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Fixed hardware: the compute axis must stop cancelling out
+# ---------------------------------------------------------------------------
+def test_a_dearer_model_affords_fewer_scores_on_fixed_hardware(mission, tight) -> None:
+    """The point of the fixed-hardware mode: cost per frame becomes coverage.
+
+    Same silicon, same cycle budget; the only difference is what the model
+    costs. An expensive model must end up scoring strictly fewer frames.
+    """
+    budget = 5_000_000.0  # what the hardware was provisioned for, per score
+    cheap = replay(mission, _FakeModel(), method="score_first", config=tight,
+                   cycles_per_score=budget, budget_cycles_per_score=budget)
+    dear = replay(mission, _FakeModel(), method="score_first", config=tight,
+                  cycles_per_score=budget * 10, budget_cycles_per_score=budget)
+
+    assert dear.n_frames_never_scored > cheap.n_frames_never_scored
+    assert dear.scores_affordable_per_window < cheap.scores_affordable_per_window
+    assert dear.prefilter_recall_natural <= cheap.prefilter_recall_natural
+
+
+def test_own_hardware_budgets_make_every_model_afford_the_same(mission, tight) -> None:
+    """Without a fixed hardware the budget scales with the model, which is
+    exactly why the compute axis cancels and the mode is needed."""
+    a = replay(mission, _FakeModel(), method="score_first", config=tight,
+               cycles_per_score=1_000_000.0)
+    b = replay(mission, _FakeModel(), method="score_first", config=tight,
+               cycles_per_score=50_000_000.0)
+    assert a.scores_affordable_per_window == pytest.approx(b.scores_affordable_per_window)
+
+
+def test_unlimited_compute_scores_everything(mission, tight) -> None:
+    limited = replay(mission, _FakeModel(), method="score_first", config=tight)
+    unlimited = replay(
+        mission, _FakeModel(), method="score_first",
+        config=SimConfig(**{**tight.__dict__, "unlimited_compute": True}),
+    )
+    assert limited.n_unscored > 0
+    assert unlimited.n_unscored == 0
+    assert unlimited.prefilter_recall_natural == pytest.approx(1.0)
+    assert unlimited.n_natural_never_scored == 0
+
+
+def test_prefilter_recall_is_unique_frames_not_frame_windows(mission, tight) -> None:
+    result = replay(mission, _FakeModel(), method="score_first", config=tight)
+    assert 0.0 <= result.prefilter_recall_natural <= 1.0
+    # n_unscored counts frame-window pairs and may exceed the frame count;
+    # the recall denominator may not.
+    assert result.n_natural_never_scored <= mission.n_natural
+
+
+# ---------------------------------------------------------------------------
+# Alternative prefilter
+# ---------------------------------------------------------------------------
+def test_lowrank_prefilter_falls_back_loudly_without_components(mission, tight) -> None:
+    """A model with no components cannot supply a lowrank filter, and the run
+    must say so in the name rather than silently reporting variance as lowrank."""
+    result = replay(
+        mission, _FakeModel(), method="score_first",
+        config=SimConfig(**{**tight.__dict__, "prefilter_mode": "lowrank"}),
+    )
+    assert "lowrank unavailable" in result.prefilter_name
+
+
+def test_lowrank_prefilter_is_used_when_components_exist(mission, tight) -> None:
+    from sim.prefilter import build_prefilter
+
+    class _PCALike(_FakeModel):
+        def __init__(self):
+            super().__init__()
+            dim = 64 * 64 * 6
+            self.components_ = np.zeros((8, dim), dtype=np.float32)
+            self.components_[:, 0] = 1.0
+            self.mean_ = np.zeros(dim, dtype=np.float32)
+            self.transform = _IdentityTransform(dim)
+
+    built = build_prefilter("lowrank", _PCALike(), (64, 64, 6), n_components=4)
+    assert built.name == "lowrank(k=4)"
+    assert built.flops > 0
+    stats = built.statistics(np.zeros((3, 64, 64, 6), dtype=np.float32))
+    assert stats.shape == (3, 2)
+
+
+def test_unknown_prefilter_mode_is_rejected(mission) -> None:
+    with pytest.raises(ValueError, match="prefilter_mode must be"):
+        SimConfig(prefilter_mode="telepathy").validate()
+
+
+class _IdentityTransform:
+    def __init__(self, dim: int) -> None:
+        self.dim = dim
+
+    def apply(self, frames: np.ndarray) -> np.ndarray:
+        frames = np.asarray(frames, dtype=np.float32)
+        return frames.reshape(len(frames), -1)
+
+    def flops_per_frame(self) -> int:
+        return self.dim
+
+
 def test_plan_windows_carries_the_budget(mission) -> None:
     windows = plan_windows(mission.rows, sols_per_window=40,
                            bits_per_window=5000.0, cycles_per_window=1e6)

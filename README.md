@@ -355,7 +355,28 @@ is captured, ~7.9 frames per window).
 distance to a label-reading oracle. It also spends half the downlink share on
 rover-made housekeeping that FIFO does (0.160 vs 0.325).
 
-Three things the replay exposes that the static evaluation cannot:
+### On the processor Curiosity actually carries
+
+The table above gives each tier a cycle budget sized to *its own* reference
+processor, so all three afford ~31.7 scores per window and the compute axis
+cancels. Pin the hardware instead — every model charged its real cost on one
+processor, with that processor's budget — and the comparison changes completely
+(`make simulate-fixed-hw HARDWARE=rad750`):
+
+| model on a RAD750 | cycles/inference | scores affordable/window | natural frames never scored | science yield |
+|---|---|---|---|---|
+| rad750 (PCA) | 2.6 M | 31.7 | 29 of 169 | **0.556** |
+| myriad (conv AE) | 28.3 M | 2.9 | 160 of 169 | **0.053** |
+| snapdragon (conv AE) | 147.6 M | 0.6 | 169 of 169 | **0.000** |
+
+**On the flight-heritage processor the more accurate model does not merely lose
+— it cannot run.** The snapdragon net cannot afford one full score per window,
+so it never scores anything and transmits nothing; a real system would fall
+back to FIFO's 0.154. Add a 1 W Myriad-class accelerator and the ordering
+recovers (rad750 0.509, myriad 0.503, snapdragon 0.178) — which is precisely
+the trade ESA made on Phi-Sat-1, now with a number attached.
+
+Three more things the replay exposes that the static evaluation cannot:
 
 1. **The tier ranking inverts.** rad750 wins the simulation (0.556) despite
    myriad winning the static aggregate ROC AUC. Science yield depends only on
@@ -369,12 +390,34 @@ Three things the replay exposes that the static evaluation cannot:
    costs 14% of a full score and 1,019 frame-windows go unscored; at myriad
    scale it costs 1.3% and only 632 do. A cheaper model does not automatically
    mean more frames examined.
-3. **Chronological replay costs accuracy, as predicted.** Switching from
-   `frozen` to `online` (bootstrap on early sols, refit from what has actually
-   been seen, no labels) drops science yield 0.556 → **0.462**. The frozen
-   model is optimistic by construction — `train_typical` spans the whole
-   mission including sols the rover has not reached. The drop is the honest
-   number, in [`results/SIMULATION_online.md`](results/SIMULATION_online.md).
+3. **A detector does not need to know what is interesting — it needs to learn
+   what is ordinary.** `online` starts knowing nothing, bootstraps after 200
+   sols on whatever it has captured (no labels), and refits every 4 windows.
+   Science yield 0.556 → **0.462** against the frozen model, which is
+   optimistic by construction since `train_typical` spans sols the rover has
+   not reached. The cold-start curve is the answer to "how would this work at a
+   body nobody has visited": the natural share of what it chose to transmit
+   goes from **0.152 in the first five windows to 0.686 in the last five**.
+   FIFO is the control — its online and frozen rows are identical, so the gap
+   is the model learning, not an artifact of the replay.
+
+4. **Whether compute or bandwidth binds depends on whether the model fits.**
+   With the cycle budget lifted entirely, all three models land in a narrow
+   band (0.503–0.509) — once compute is free they are worth the same, and every
+   difference above is a compute effect, not an accuracy one. When a model does
+   *not* fit its hardware, compute dominates overwhelmingly (+0.45 and +0.51
+   for myriad and snapdragon on a RAD750). When it does fit, bandwidth binds
+   and scoring everything is actually **worse** (rad750: 0.556 → 0.509),
+   because the variance prefilter is a second filter with a different bias that
+   happens to favour textured natural classes. Prefilter recall of 0.83–0.91 is
+   not a ceiling being hit; the 25% downlink is.
+
+A cheaper-but-better prefilter was tried once, honestly: ranking by the
+model's own top-4 principal components (a sixteenth of a full score, so a
+comparable cost). It improved recall of natural frames as intended, 0.828 →
+0.846, and yield still **fell** 0.556 → 0.527 — a prefilter better aligned with
+the model is a weaker second opinion. Reported as measured; the cheap statistic
+stays.
 
 Design decisions, and where they are argued: unselected frames are **retained**
 in an age-limited buffer (200 sols) and expiries are counted, never silent;

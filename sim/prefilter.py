@@ -92,3 +92,79 @@ def prefilter_rank(statistics: np.ndarray, stats: RunningStats) -> np.ndarray:
     if len(statistics) == 0:
         return np.zeros(0)
     return stats.z(statistics)
+
+
+# ---------------------------------------------------------------------------
+# Pluggable prefilters
+# ---------------------------------------------------------------------------
+@dataclass
+class Prefilter:
+    """A triage statistic plus its honest FLOP cost.
+
+    `statistics` returns a (N, k) feature block that RunningStats z-scores; the
+    ranking is the summed absolute z-score, so a frame unusual in ANY feature
+    is worth a full look.
+    """
+
+    name: str
+    flops: int
+    _fn: object
+
+    def statistics(self, frames: np.ndarray) -> np.ndarray:
+        return self._fn(frames)  # type: ignore[operator]
+
+
+def _variance_prefilter(frame_shape) -> Prefilter:
+    return Prefilter("variance", prefilter_flops(frame_shape), frame_statistics)
+
+
+def _lowrank_prefilter(model, frame_shape, n_components: int) -> Prefilter | None:
+    """Rank by the residual of a SEVERELY truncated principal subspace.
+
+    The idea being tested: the variance statistic is cheap but only loosely
+    related to what the model actually scores. Reusing the model's own top few
+    components should rank frames much closer to the way the full model would,
+    at a comparable cost -- a k=4 projection costs 2*4*D against 2*64*D for the
+    full score, so about a sixteenth of it.
+
+    Returns None when the model exposes no components (the autoencoder tiers),
+    and the caller falls back to variance rather than pretending otherwise.
+    """
+    components = getattr(model, "components_", None)
+    transform = getattr(model, "transform", None)
+    mean = getattr(model, "mean_", None)
+    if components is None or transform is None or mean is None:
+        return None
+
+    k = max(1, min(int(n_components), len(components)))
+    basis = np.ascontiguousarray(components[:k])
+    dim = basis.shape[1]
+
+    def statistics(frames: np.ndarray) -> np.ndarray:
+        z = transform.apply(frames)
+        centred = z - mean
+        projection = centred @ basis.T
+        sq_norm = np.einsum("ij,ij->i", centred, centred, dtype=np.float64)
+        sq_proj = np.einsum("ij,ij->i", projection, projection, dtype=np.float64)
+        residual = np.sqrt(np.maximum(sq_norm - sq_proj, 0.0))
+        # Second feature keeps the interface identical to the variance filter
+        # and adds the in-subspace distance, which is cheap once projected.
+        return np.stack([residual, np.abs(projection).sum(axis=1)], axis=1)
+
+    flops = int(transform.flops_per_frame() + dim + 2 * k * dim + 2 * dim + 2 * k)
+    return Prefilter(f"lowrank(k={k})", flops, statistics)
+
+
+def build_prefilter(mode: str, model, frame_shape, *, n_components: int = 4) -> Prefilter:
+    """Resolve a prefilter by name, falling back loudly rather than silently."""
+    if mode == "variance":
+        return _variance_prefilter(frame_shape)
+    if mode == "lowrank":
+        built = _lowrank_prefilter(model, frame_shape, n_components)
+        if built is not None:
+            return built
+        # No components to borrow (autoencoder tiers): say so via the name so
+        # the report cannot claim a lowrank prefilter that never ran.
+        fallback = _variance_prefilter(frame_shape)
+        return Prefilter("variance (lowrank unavailable)", fallback.flops, fallback._fn)
+    raise ValueError(f"unknown prefilter mode {mode!r}; expected variance|lowrank")
