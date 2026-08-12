@@ -111,3 +111,31 @@ def test_every_writing_entry_point_snapshots_first() -> None:
             f"scripts/{name} writes provenance but never snapshots git state, "
             "so its sidecar will report the tree its own output dirtied"
         )
+
+
+# ---------------------------------------------------------------------------
+# Source-only dirtiness
+# ---------------------------------------------------------------------------
+
+
+def test_regenerating_an_artifact_is_not_a_dirty_source(repo: Path) -> None:
+    """Training three tiers in sequence must not make the last two untraceable.
+
+    The second run sees a tree the first run's artifact dirtied. That says
+    nothing about whether the code was committed, which is the only thing the
+    field is asked to answer.
+    """
+    (repo / "artifacts").mkdir()
+    (repo / "artifacts" / "rad750.npz").write_text("weights", encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "artifact")
+
+    (repo / "artifacts" / "rad750.npz").write_text("retrained", encoding="utf-8")
+    assert provenance.git_dirty(sources_only=False) is True, "the tree really did change"
+    assert provenance.git_dirty() is False, "a regenerated artifact is not dirty source"
+
+
+def test_uncommitted_code_is_still_dirty(repo: Path) -> None:
+    """And the field must keep its teeth."""
+    (repo / "train.py").write_text("print('edited')", encoding="utf-8")
+    assert provenance.git_dirty() is True

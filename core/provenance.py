@@ -96,14 +96,30 @@ def git_commit() -> str | None:
     return _git("rev-parse", "HEAD")
 
 
-def git_dirty() -> bool | None:
+#: Directories this project WRITES. Changes here are the expected output of a
+#: run, not evidence that the code was uncommitted.
+GENERATED_PATHS = ("artifacts", "runs", "results", "web/public/data")
+
+
+def git_dirty(*, sources_only: bool = True) -> bool | None:
     """True if the working tree has uncommitted changes.
 
     False for a clean tree, None only when git could not answer at all -- inside
-    a built image, say. The three cases are genuinely different and the sidecar
-    records which one applied.
+    a built image, say. Three genuinely different cases, and the sidecar records
+    which one applied.
+
+    `sources_only` excludes the directories this project writes. The question a
+    sidecar is asking is "was the CODE that produced this committed", and
+    training three tiers in sequence means the second run sees a tree the first
+    run's artifact already dirtied. Counting that as provenance failure would
+    make it impossible for more than one artifact to be clean, and would say
+    nothing about reproducibility either way. Pass False for the literal
+    whole-tree answer.
     """
-    ok, status = _git_output("status", "--porcelain")
+    args = ["status", "--porcelain"]
+    if sources_only:
+        args += ["--", ".", *(f":(exclude){p}" for p in GENERATED_PATHS)]
+    ok, status = _git_output(*args)
     if not ok:
         return None
     return bool(status)
