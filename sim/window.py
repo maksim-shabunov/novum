@@ -51,6 +51,8 @@ do. A refit invalidates the cache, and the re-scoring is charged again.
 
 from __future__ import annotations
 
+import copy
+import hashlib
 import json
 import time
 from collections.abc import Iterable, Sequence
@@ -59,7 +61,7 @@ from pathlib import Path
 
 import numpy as np
 
-from core.budgets import BudgetSpec
+from core.budgets import BudgetPlan, BudgetSpec
 from core.logging_utils import get_logger
 from core.manifest import ManifestRow
 
@@ -289,7 +291,20 @@ class WindowRecord:
     cum_science_yield: float
     cum_wasted_bit_share: float
     refit: bool = False
+    #: Natural frames in THIS window's buffer that carried a real score when the
+    #: selector ran, over natural frames buffered. None when the cycle budget
+    #: did not bind (nothing was left unscored, so recall is trivially 1).
+    #: NOT comparable to SimResult.prefilter_recall_natural, which is over
+    #: unique frames across the whole mission -- a different denominator.
     prefilter_recall: float | None = None
+    prefilter_scored_natural: int | None = None
+    prefilter_buffered_natural: int | None = None
+    #: Mission indices of the frames transmitted this window, in the order the
+    #: policy chose them, and of the frames that left the buffer without ever
+    #: being sent. Counts alone cannot answer "which images reached the ground",
+    #: which is the only question the console exists to answer.
+    selected_indices: tuple[int, ...] = ()
+    lost_indices: tuple[int, ...] = ()
 
     def to_json(self) -> dict:
         return asdict(self)
@@ -389,15 +404,56 @@ def _derive_budgets(
     return bits, cycles, derivation
 
 
-def _refit_model(model, mission: MissionStream, indices: Sequence[int], seed: int):
-    """Refit the novelty model on frames captured so far. No labels used."""
+def refit_chain_key(previous: str, indices: Sequence[int], seed: int) -> str:
+    """Identity of a model after one more refit, given what it was before.
+
+    A CHAIN, not just the current pool. Whether a refit depends on the weights
+    it started from is a property of the model class -- the autoencoder rebuilds
+    its net from scratch under a fixed seed, but the input transform is fitted
+    lazily and then kept -- and a cache key that quietly assumed otherwise would
+    return a model trained on the wrong history. Folding the previous key in
+    makes the identity correct without having to be right about that.
+    """
+    h = hashlib.blake2b(previous.encode("utf-8"), digest_size=16)
+    h.update(np.asarray(sorted(indices), dtype=np.int64).tobytes())
+    h.update(str(seed).encode("utf-8"))
+    return h.hexdigest()
+
+
+def _refit_model(
+    model,
+    mission: MissionStream,
+    indices: Sequence[int],
+    seed: int,
+    *,
+    cache: dict | None = None,
+    cache_key: str | None = None,
+):
+    """Refit the novelty model on frames captured so far. No labels used.
+
+    `cache` memoises by chain key. The refit pool is every frame captured so
+    far, which depends on the arrival schedule and NOT on the downlink budget or
+    the selection policy -- so replaying the same mission at six budgets repeats
+    an identical sequence of fits six times. On the autoencoder tiers that is
+    seven model trainings per run, and it is the single largest cost in building
+    the console grid.
+    """
     from core.dataset import ChunkedArray
 
     if len(indices) < 8:
         return model
+
+    if cache is not None and cache_key in cache:
+        # A copy each way: the caller refits this model again next cadence, and
+        # the cache must not hand out a reference it will then watch mutate.
+        return copy.deepcopy(cache[cache_key])
+
     subset = mission.batch(sorted(indices))
     chunks = ChunkedArray(subset, chunk_size=min(256, len(subset)))
     model.fit(chunks, n_samples=len(subset), seed=seed)
+
+    if cache is not None and cache_key is not None:
+        cache[cache_key] = copy.deepcopy(model)
     return model
 
 
@@ -412,6 +468,7 @@ def replay(
     artifact: str = "",
     tier: str = "",
     windows: Iterable[DownlinkWindow] | None = None,
+    refit_cache: dict | None = None,
 ) -> SimResult:
     """Replay the mission window by window under one selection policy.
 
@@ -463,6 +520,9 @@ def replay(
     # ground-feedback uplink; without it the rover has no labels at all.
     seen: list[int] = []
     known_novel: set[int] = set()
+    # Identity of the model's refit history so far, for `refit_cache`.
+    refit_chain = artifact or tier or "model"
+
     score_cache: dict[int, float] = {}
     n_refits = 0
     bootstrapped = config.adaptation == "frozen"
@@ -496,18 +556,24 @@ def replay(
 
         n_expired_before = buffer.n_expired
         n_evicted_before = buffer.n_evicted
-        buffer.expire(current_sol)
-        buffer.enforce_capacity()
+        dropped = buffer.expire(current_sol)
+        dropped += buffer.enforce_capacity()
         n_expired = buffer.n_expired - n_expired_before
         n_evicted = buffer.n_evicted - n_evicted_before
+        # Aged out or evicted: either way the frame never reached the ground.
+        lost_indices = tuple(item.frame.index for item in dropped)
 
         candidates = buffer.candidates()
         if not candidates:
             continue
 
         # -- online adaptation ------------------------------------------------
+        # Only for policies that actually consult the model. FIFO and oracle
+        # never read a novelty score, so refitting for them changes nothing
+        # observable and costs a full model fit per cadence -- 150 seconds a run
+        # on the autoencoder tiers, spent to produce identical output.
         did_refit = False
-        if config.adaptation == "online":
+        if config.adaptation == "online" and policy.needs_scores(method):
             due_bootstrap = not bootstrapped and current_sol >= config.bootstrap_sols
             due_refit = (
                 bootstrapped
@@ -516,7 +582,11 @@ def replay(
             )
             if due_bootstrap or due_refit:
                 pool = [i for i in seen if i not in known_novel][-config.refit_max_frames :]
-                model = _refit_model(model, mission, pool, config.seed)
+                refit_chain = refit_chain_key(refit_chain, pool, config.seed)
+                model = _refit_model(
+                    model, mission, pool, config.seed,
+                    cache=refit_cache, cache_key=refit_chain,
+                )
                 score_cache.clear()   # a refit invalidates every cached score
                 bootstrapped = True
                 did_refit = True
@@ -591,35 +661,51 @@ def replay(
         else:
             eligible = candidates
 
-        if not eligible:
-            continue
-
         # -- selection under both budgets -------------------------------------
-        scores = np.array([c.score if c.score is not None else 0.0 for c in eligible])
-        bits = np.array([c.frame.bits for c in eligible])
-        cycles = np.full(len(eligible), compress_cycles)
-        capture_order = np.array(
-            [c.captured_sol * 10_000 + c.frame.index for c in eligible], dtype=np.float64
-        )
-        is_natural = np.array([c.frame.is_natural for c in eligible])
+        # A window where the cycle budget scored NOTHING is still a window, and
+        # recording it is the whole point: the expensive-model-on-flight-hardware
+        # case is exactly the run where nothing is eligible, and skipping the
+        # record would report that catastrophe as an absence of data rather than
+        # as the result it is.
+        if eligible:
+            scores = np.array([c.score if c.score is not None else 0.0 for c in eligible])
+            bits = np.array([c.frame.bits for c in eligible])
+            cycles = np.full(len(eligible), compress_cycles)
+            capture_order = np.array(
+                [c.captured_sol * 10_000 + c.frame.index for c in eligible],
+                dtype=np.float64,
+            )
+            is_natural = np.array([c.frame.is_natural for c in eligible])
 
-        # Whatever triage did not spend rolls back into the transmit allowance.
-        selection_budget = BudgetSpec(
-            bits=window.budget.bits,
-            cycles=max(transmit_reserve + max(cycles_left, 0.0), compress_cycles),
-        )
-        plan = policy.select(
-            method,
-            scores=scores,
-            bits=bits,
-            cycles=cycles,
-            capture_order=capture_order,
-            is_natural=is_natural,
-            budget=selection_budget,
-            rng=rng,
-        )
-
-        chosen = [eligible[i] for i in plan.selected]
+            # Whatever triage did not spend rolls back into the transmit allowance.
+            selection_budget = BudgetSpec(
+                bits=window.budget.bits,
+                cycles=max(transmit_reserve + max(cycles_left, 0.0), compress_cycles),
+            )
+            plan = policy.select(
+                method,
+                scores=scores,
+                bits=bits,
+                cycles=cycles,
+                capture_order=capture_order,
+                is_natural=is_natural,
+                budget=selection_budget,
+                rng=rng,
+            )
+            chosen = [eligible[i] for i in plan.selected]
+        else:
+            # Nothing carried a score, so nothing could be ranked, so nothing
+            # was sent. Cycles are what ran out.
+            plan = BudgetPlan(
+                selected=np.zeros(0, dtype=np.int64),
+                total_value=0.0,
+                used_bits=0.0,
+                used_cycles=0.0,
+                budget=window.budget,
+                method=method,
+                binding_constraint="cycles",
+            )
+            chosen = []
 
         # -- transmit ---------------------------------------------------------
         window_natural = window_rover = window_typical = 0
@@ -654,15 +740,27 @@ def replay(
 
         # -- record ------------------------------------------------------------
         wasted = bits_rover / total_bits_used if total_bits_used > 0 else 0.0
+        # Of the natural frames in THIS window's buffer, how many carried a real
+        # score when the selector ran? Read `item.score`, not `score_cache`: the
+        # transmitted frames were evicted from the cache a few lines above, and
+        # counting the cache instead reported exactly those frames as unscored
+        # -- the ones triage got RIGHT. That is how window 3 could report 0%
+        # recall in the same breath as four natural frames transmitted.
+        #
+        # This is a per-window buffer snapshot and is NOT the mission-level
+        # `prefilter_recall_natural` below, which is over unique frames.
         prefilter_recall = None
+        prefilter_scored_natural = None
+        prefilter_buffered_natural = None
         if policy.needs_scores(method) and n_unscored:
             scored_natural = sum(
-                1 for c in candidates
-                if c.frame.is_natural and c.frame.index in score_cache
+                1 for c in candidates if c.frame.is_natural and c.score is not None
             )
             buffered_natural = sum(1 for c in candidates if c.frame.is_natural)
             if buffered_natural:
                 prefilter_recall = scored_natural / buffered_natural
+                prefilter_scored_natural = scored_natural
+                prefilter_buffered_natural = buffered_natural
 
         records.append(
             WindowRecord(
@@ -697,6 +795,10 @@ def replay(
                 cum_wasted_bit_share=wasted,
                 refit=did_refit,
                 prefilter_recall=prefilter_recall,
+                prefilter_scored_natural=prefilter_scored_natural,
+                prefilter_buffered_natural=prefilter_buffered_natural,
+                selected_indices=tuple(item.frame.index for item in chosen),
+                lost_indices=lost_indices,
             )
         )
 

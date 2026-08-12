@@ -222,8 +222,8 @@ def _fixed_hardware_section(experiments: dict[str, list[SimResult]], method: str
             "cycles/window, identical for every model.",
             "",
             "| model | cycles/inference | scores affordable per window | "
-            "frames never scored | natural frames never scored | prefilter recall | "
-            "science yield |",
+            "frames never scored | natural frames never scored | "
+            "prefilter recall (mission, unique frames) | science yield |",
             "|---|---|---|---|---|---|---|",
         ]
         for result in sorted(results, key=lambda r: _tier_key(r.tier)):
@@ -349,15 +349,18 @@ def _prefilter_section(experiments: dict[str, list[SimResult]], method: str) -> 
         "A frame the cheap prefilter never promotes never gets a real novelty "
         "score, and a frame without a score can never be selected — no matter how "
         "much downlink is free. So prefilter recall of natural-novel frames sits "
-        "*underneath* the bit budget as a potential ceiling on science yield.",
+        "*underneath* the bit budget as a potential ceiling on science yield. "
+        "Recall here is over **unique** natural frames ever buffered, each "
+        "counted once — not the per-window buffer snapshot reported in "
+        "\"Where the compute budget bit\" above.",
         "",
         "The comparison column is the same run with the cycle budget lifted "
         "entirely: every buffered frame scored, bits still binding. **It is not an "
         "upper bound** — see below, where scoring everything sometimes does worse "
         "— so it is reported as what it is, an all-frames-scored contrast.",
         "",
-        "| hardware | model | prefilter recall (natural) | natural never scored | "
-        "achieved yield | yield if all frames scored | change |",
+        "| hardware | model | prefilter recall (mission, unique frames) | "
+        "natural never scored | achieved yield | yield if all frames scored | change |",
         "|---|---|---|---|---|---|---|",
     ]
     pairs = (
@@ -465,8 +468,8 @@ def _lowrank_section(experiments: dict[str, list[SimResult]], method: str) -> li
         "components to borrow and fall back to variance, which the "
         "`prefilter` column states rather than hides.",
         "",
-        "| hardware | model | prefilter | recall before | recall after | "
-        "yield before | yield after | change |",
+        "| hardware | model | prefilter | mission recall before | "
+        "mission recall after | yield before | yield after | change |",
         "|---|---|---|---|---|---|---|---|",
         *rows,
         "",
@@ -602,7 +605,18 @@ def write_simulation_md(
         "everything else is left unscored and cannot be selected by a score-based "
         "policy. `never scored` above counts those frame-window pairs.",
         "",
-        "| tier | method | scores affordable/window | frames left unscored | prefilter recall of natural |",
+        "Two prefilter-recall figures appear in this document and they are **not "
+        "the same measurement**. The per-window figure below is a buffer "
+        "snapshot: of the natural frames sitting in the buffer when a window "
+        "opened, how many carried a real score. Averaging it weights a "
+        "long-buffered frame once per window it survived. The mission figure "
+        "used in the fixed-hardware tables is over *unique* natural frames ever "
+        "buffered, each counted once. The mission figure is the one that bounds "
+        "science yield; the per-window mean says how hard triage was squeezing "
+        "at the time.",
+        "",
+        "| tier | method | scores affordable/window | frames left unscored | "
+        "mean per-window prefilter recall (buffer snapshot) |",
         "|---|---|---|---|---|",
     ]
     for tier in sorted(by_tier, key=tier_key):

@@ -1,0 +1,57 @@
+# =============================================================================
+# NOVUM mission-control console.
+#
+#   docker compose -f docker/docker-compose.yml up
+#
+# Multi-stage: node builds, then a slim runtime serves the standalone output.
+# The precomputed grid is COPIED IN, not generated here -- this image never
+# sees the dataset, never loads a model, and never imports Python. That is the
+# point of precomputing: the console is a static site with one small API beside
+# it for the briefing prose.
+# =============================================================================
+FROM node:22-slim AS build
+
+WORKDIR /app
+
+# Dependencies first, so a source edit does not re-resolve the tree.
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+
+COPY web/ ./
+
+# The console cannot start without its precomputed grid, and a build that
+# silently produces an empty console is worse than one that stops.
+RUN test -f public/data/grid.json || { \
+      echo "ERROR: web/public/data/grid.json is missing." >&2; \
+      echo "Run 'make console' on a machine with the dataset and commit it." >&2; \
+      exit 1; \
+    }
+
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+
+
+FROM node:22-slim AS runtime
+
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0
+
+WORKDIR /app
+
+# `output: "standalone"` in next.config.ts emits a self-contained server with
+# only the modules actually reached, so the runtime image carries no toolchain.
+COPY --from=build /app/.next/standalone ./
+COPY --from=build /app/.next/static ./.next/static
+COPY --from=build /app/public ./public
+
+RUN useradd --system --uid 1001 novum && chown -R novum:novum /app
+USER novum
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+CMD ["node", "server.js"]

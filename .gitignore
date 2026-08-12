@@ -41,3 +41,9 @@ dist/
 Thumbs.db
 .idea/
 .vscode/
+
+# Next.js console
+web/node_modules/
+web/.next/
+web/out/
+web/next-env.d.ts

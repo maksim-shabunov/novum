@@ -24,9 +24,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from core import __version__ as novum_version
 from core import paths
+from core.env import load_env
 from core.logging_utils import get_logger, setup_logging
 
 from .settings import Settings, get_settings
+
+# Under uvicorn, importing this module IS process entry. Load credentials once,
+# here, before any settings are read.
+load_env()
 
 log = get_logger("novum.api")
 
@@ -43,10 +48,13 @@ app = FastAPI(
 _settings = get_settings()
 setup_logging(_settings.log_level)
 
-if _settings.allowed_origins:
+_cors_origins = _settings.allowed_origins
+_cors_regex = _settings.cors_origin_regex
+if _cors_origins or _cors_regex:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=_settings.allowed_origins,
+        allow_origins=_cors_origins,
+        allow_origin_regex=_cors_regex,
         allow_credentials=True,
         allow_methods=["GET", "POST"],
         allow_headers=["*"],
@@ -165,6 +173,62 @@ def get_metrics(name: str, _: None = Depends(require_api_key)) -> dict[str, Any]
             detail=f"no published metrics for {name!r}; run `make eval`",
         )
     return metrics
+
+
+# ---------------------------------------------------------------------------
+# Mission-control console
+#
+# The console reads its precomputed grid as a static file straight from the web
+# server; nothing here is on that path. What it does need from a Python process
+# is the briefing, which is prose generated from the same decision log -- and
+# which must work with no API key, so the deterministic template is the default
+# rather than the fallback.
+# ---------------------------------------------------------------------------
+@app.get("/api/brief", tags=["console"])
+def mission_brief(
+    hardware: str = "rad750",
+    tier: str = "rad750",
+    budget: float = 0.25,
+    adaptation: str = "frozen",
+    policy: str = "score_first",
+    llm: bool = False,
+    _: None = Depends(require_api_key),
+) -> dict[str, Any]:
+    """Operator briefing for one console cell.
+
+    `llm=true` asks the configured model to arrange the prose. Every figure is
+    substituted from the decision log after generation either way, so the two
+    modes differ in wording and never in numbers.
+    """
+    from core.ground.console_brief import brief_for_cell
+
+    try:
+        return brief_for_cell(
+            hardware, tier, budget, adaptation, policy, offline=not llm
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=404, detail=f"no precomputed run for cell {exc}"
+        ) from exc
+
+
+@app.get("/api/console/axes", tags=["console"])
+def console_axes(_: None = Depends(require_api_key)) -> dict[str, Any]:
+    """What the console can offer: every axis value with a precomputed run."""
+    from core.ground.console_brief import load_grid
+
+    try:
+        grid = load_grid()
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {
+        "axes": grid["axes"],
+        "processors": grid.get("processors", {}),
+        "default": grid["default"],
+        "n_cells": len(grid["cells"]),
+    }
 
 
 # ---------------------------------------------------------------------------

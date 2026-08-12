@@ -1,0 +1,60 @@
+DATASET ATTRIBUTION AND LICENCE
+==============================
+
+NOVUM is evaluated on a third-party dataset that is NOT covered by the MIT
+licence in LICENSE. Its terms require attribution, and this file exists so that
+requirement travels with the repository rather than living only in a README
+section somebody might trim.
+
+DATASET
+-------
+Mars novelty detection Mastcam labeled dataset
+Kerner, H. R., Wagstaff, K. L., Bue, B. D., Gray, P. C., Bell, J. F.,
+and Ben Amor, H.
+Zenodo record 3732485 -- https://doi.org/10.5281/zenodo.3732485
+
+LICENCE
+-------
+Creative Commons Attribution 4.0 International (CC-BY-4.0)
+https://creativecommons.org/licenses/by/4.0/
+
+You are free to share and adapt the material for any purpose, including
+commercially, provided you give appropriate credit, link to the licence, and
+indicate if changes were made.
+
+CITATION
+--------
+Kerner, H. R., Wagstaff, K. L., Bue, B. D., Gray, P. C., Bell, J. F., and
+Ben Amor, H. "Toward Generalized Change Detection on Planetary Surfaces with
+Convolutional Autoencoders and Transfer Learning." IEEE Journal of Selected
+Topics in Applied Earth Observations and Remote Sensing, 12(10), 2019.
+
+Dataset: Kerner et al., Zenodo, 2020. DOI 10.5281/zenodo.3732485.
+
+SOURCE IMAGERY
+--------------
+Derived from Mastcam multispectral imagery acquired by the Mars Science
+Laboratory (Curiosity) rover and archived by the NASA Planetary Data System
+(PDS) Imaging Node. Original data courtesy NASA/JPL-Caltech/MSSS.
+
+CHANGES MADE, as CC-BY requires be indicated
+--------------------------------------------
+1. Frames converted from float64 .npy to memory-mapped float32 arrays
+   (scripts/preprocess.py). No resampling; a dtype narrowing only.
+2. Splits materialised as test_novel_all (430 unique frames) and
+   test_novel_byclass (451 frame-label pairs) to stop the archive's overlapping
+   all/ and per-class folders being double-counted. See the README section
+   "The test_novel gotcha".
+3. Thumbnails rendered for display in web/public/data/atlas.png: three of the
+   six bands mapped to RGB with fixed per-channel gains and a per-frame
+   contrast stretch, downsampled 64x64 -> 32x32 by exact box average. The
+   mapping is documented in core/thumbnails.py. These are a VISUALISATION and
+   not a calibrated radiometric product; no measurement in this project is
+   made on them.
+
+WHAT IS AND IS NOT REDISTRIBUTED HERE
+-------------------------------------
+No raw or processed dataset frames are committed to this repository; data/ is
+gitignored and fetched from Zenodo by scripts/fetch_data.py. The rendered
+thumbnail atlas IS committed, as a derived work under the same CC-BY-4.0 terms,
+with the attribution above reproduced in the console UI.

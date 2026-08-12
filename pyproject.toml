@@ -59,6 +59,13 @@ dev = [
   "ruff>=0.4",
 ]
 
+# Optional: run the console grid build in a container instead of on a laptop.
+# Nothing in the project requires it -- `make console` does the same work
+# locally, and the two share their replay code.
+modal = [
+  "modal>=1.5",
+]
+
 [project.urls]
 Dataset = "https://doi.org/10.5281/zenodo.3732485"
 

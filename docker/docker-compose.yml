@@ -39,6 +39,9 @@ services:
     volumes:
       # Read-only: the API consumes artifacts, it does not produce them.
       - ../artifacts:/app/artifacts:ro
+      # The precomputed console grid, for the briefing endpoint. Also read-only:
+      # the API renders prose from these runs, it never replays one.
+      - ../web/public/data:/app/web/public/data:ro
     healthcheck:
       test:
         - CMD
@@ -49,6 +52,28 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
+    networks: [novum]
+
+  # The mission-control console. Started by a bare `up`, because the acceptance
+  # test is a judge on a clean machine typing `docker compose up` and getting a
+  # console -- no data download, no training step, no login, no key.
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+    image: novum-web:latest
+    container_name: novum-web
+    restart: unless-stopped
+    ports:
+      - "${NOVUM_WEB_PORT:-3000}:3000"
+    environment:
+      # Where the browser reaches the briefing endpoint. It is the BROWSER that
+      # resolves this, not the container, so it is a host address rather than
+      # the compose service name.
+      NEXT_PUBLIC_NOVUM_API: "${NOVUM_PUBLIC_API:-http://127.0.0.1:8000}"
+    depends_on:
+      api:
+        condition: service_started
     networks: [novum]
 
   # Offline training. Not started by `up`; run it explicitly:

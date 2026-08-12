@@ -7,6 +7,12 @@ venv/
 .git/
 .github/
 web/node_modules/
+# A local `next build` leaves a standalone bundle that carries its own copy of
+# node_modules -- and repeated builds accumulate several. Copying that into the
+# image would upload hundreds of megabytes only for `npm run build` to
+# regenerate it, so the container always builds from source.
+web/.next/
+web/out/
 
 __pycache__/
 *.py[cod]

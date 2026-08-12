@@ -45,8 +45,14 @@ DOCTOR_ARGS := $(if $(STRICT),--strict,)
 RUNS_SIM_ONLINE ?= runs/sim/online-latest
 COMPOSE     ?= docker compose -f docker/docker-compose.yml
 
+RUN         ?= online-latest
+VARIANT     ?=
+
 .PHONY: help bootstrap doctor setup data fetch preprocess train sweep eval serve \
-        test lint fmt lock simulate simulate-quick simulate-fixed-hw simulate-sweep report docker-train docker-serve docker-build docker-down \
+        test lint fmt lock simulate simulate-quick simulate-fixed-hw simulate-sweep report \
+        report-mission check-llm check-figures figures console console-quick console-modal \
+        console-modal-upload web web-install web-build \
+        docker-train docker-serve docker-build docker-down \
         clean clean-data clean-venv guard-venv check-python check-deps
 
 help: ## Show this help
@@ -135,6 +141,62 @@ sweep: guard-venv ## Run the full (tier x seed) matrix, unattended
 
 report: guard-venv ## Regenerate results/RESULTS.md from stored sweep metrics (no retraining)
 	$(PY) -m scripts.report
+
+# Every headline figure in the prose is read back out of the artifact that
+# produced it. Four documents, one truth, and a red build when they disagree.
+check-figures: guard-venv ## Fail if a published figure disagrees with its artifact
+	$(PY) -m scripts.check_figures --strict
+
+figures: guard-venv ## List every published figure and the artifact it came from
+	$(PY) -m scripts.check_figures --list
+
+
+OFFLINE     ?=
+MODEL       ?=
+
+# -----------------------------------------------------------------------------
+# Mission-control console
+#
+# `console` is the only step that needs the dataset and the artifacts. Its
+# output is committed, so a fresh clone runs `make web` and has a working
+# console with no download and no training.
+# -----------------------------------------------------------------------------
+WEB         ?= web
+CONSOLE_OUT ?= $(WEB)/public/data
+
+console: guard-venv ## Precompute the atlas, mission stream and run grid for the UI
+	$(PY) -m scripts.build_console --out $(CONSOLE_OUT)
+
+console-quick: guard-venv ## One tier, two budgets: a smoke test of the console build
+	$(PY) -m scripts.build_console --out $(CONSOLE_OUT) --quick
+
+# The grid is 324 replays and the slow ones refit an autoencoder seven times.
+# That is a few minutes on real cores and an afternoon on a busy laptop, so
+# `make console-modal` runs the identical build in a container instead.
+console-modal-upload: guard-venv ## Push frames + artifacts to the Modal volume (once)
+	$(PY) -m scripts.modal_console
+
+console-modal: guard-venv ## Build the run grid on Modal -> $(CONSOLE_OUT)
+	$(BIN)/modal run scripts/modal_console.py --out $(CONSOLE_OUT)
+
+web-install: ## Install the console's npm dependencies
+	cd $(WEB) && npm ci
+
+web: ## Run the console in development (expects `make serve` for the brief)
+	cd $(WEB) && npm run dev
+
+web-build: ## Production build of the console
+	cd $(WEB) && npm run build
+
+check-llm: guard-venv ## One minimal LLM request: model, latency, tokens, cost -- or why not
+	$(PY) -m scripts.check_llm $(if $(MODEL),--model $(MODEL),)
+
+report-mission: guard-venv ## Generate ground-side mission brief (LLM or offline fallback)
+	$(PY) -m scripts.mission_brief --run-id $(RUN) \
+		$(if $(VARIANT),--variant $(VARIANT),) \
+		$(if $(OFFLINE),--offline,) \
+		--out results/MISSION_BRIEF.md
+
 
 simulate: guard-venv ## Replay the mission + all experiments -> results/SIMULATION.md
 	$(PY) -m scripts.simulate --all-tiers --experiments
