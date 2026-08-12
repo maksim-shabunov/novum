@@ -54,7 +54,12 @@ from core.budgets import (
 from core.dataset import SPLIT_NOVEL_BYCLASS, ChunkedArray, load_split
 from core.logging_utils import get_logger, setup_logging
 from core.models.registry import load_model, read_artifact_meta
-from core.provenance import file_sha256, identity_block, sidecar_path_for
+from core.provenance import (
+    file_sha256,
+    identity_block,
+    sidecar_path_for,
+    snapshot_git_state,
+)
 from core.scoring import evaluate_scores, roc_auc
 
 log = get_logger("novum.evaluate")
@@ -286,6 +291,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     setup_logging(args.log_level, force=args.log_level is not None)
+    # Freeze git state before anything is written: writing an artifact
+    # dirties the tree the sidecar would otherwise report on.
+    snapshot_git_state()
 
     artifact = Path(args.artifact or (paths.artifacts_dir() / "rad750.npz"))
     if not artifact.exists():

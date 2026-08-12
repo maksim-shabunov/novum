@@ -60,7 +60,15 @@ def arrays_content_sha256(arrays: dict) -> str:
     return h.hexdigest()
 
 
-def _git(*args: str) -> str | None:
+def _git_output(*args: str) -> tuple[bool, str]:
+    """(the command succeeded, its trimmed stdout).
+
+    Separate from `_git` because EMPTY OUTPUT IS AN ANSWER. `git status
+    --porcelain` prints nothing for a clean tree, and collapsing that to None
+    made "clean" indistinguishable from "not a repository" -- so `git_dirty`
+    could report true or unknown but never false, and no artifact could ever be
+    tied to a commit.
+    """
     try:
         out = subprocess.run(
             ["git", *args],
@@ -71,10 +79,16 @@ def _git(*args: str) -> str | None:
             check=False,
         )
     except (OSError, subprocess.SubprocessError):
-        return None
+        return False, ""
     if out.returncode != 0:
-        return None
-    return out.stdout.strip() or None
+        return False, ""
+    return True, out.stdout.strip()
+
+
+def _git(*args: str) -> str | None:
+    """Trimmed stdout, or None when the command failed or said nothing."""
+    ok, text = _git_output(*args)
+    return text or None if ok else None
 
 
 def git_commit() -> str | None:
@@ -83,11 +97,63 @@ def git_commit() -> str | None:
 
 
 def git_dirty() -> bool | None:
-    """True if the working tree has uncommitted changes. None if unknown."""
-    status = _git("status", "--porcelain")
-    if status is None:
+    """True if the working tree has uncommitted changes.
+
+    False for a clean tree, None only when git could not answer at all -- inside
+    a built image, say. The three cases are genuinely different and the sidecar
+    records which one applied.
+    """
+    ok, status = _git_output("status", "--porcelain")
+    if not ok:
         return None
-    return bool(status.strip())
+    return bool(status)
+
+
+#: Git state as it was when the process started, captured before anything is
+#: written. See `snapshot_git_state`.
+_GIT_AT_START: dict[str, object] | None = None
+
+
+def snapshot_git_state() -> dict[str, object]:
+    """Freeze the repository's state at process entry, before any output.
+
+    WHY THIS EXISTS. `git_dirty()` asks the working tree a question, and writing
+    an artifact changes the answer. `scripts/train.py` writes `rad750.npz` and
+    then records provenance, so the tree it reports on is one the artifact has
+    already dirtied -- and because the artifact is tracked, EVERY sidecar records
+    `git_dirty: true` no matter how clean the tree was when the run began. The
+    field was structurally incapable of ever being false, which is worse than
+    useless: it reads like a real warning.
+
+    Capturing at entry answers the question the field is actually asking -- was
+    this built from a known commit -- rather than the tautology that a build
+    writes files. Idempotent, so any entry point may call it.
+    """
+    global _GIT_AT_START
+    if _GIT_AT_START is None:
+        _GIT_AT_START = {
+            "git_commit": git_commit(),
+            "git_branch": git_branch(),
+            "git_dirty": git_dirty(),
+        }
+    return dict(_GIT_AT_START)
+
+
+def git_state() -> dict[str, object]:
+    """The snapshot if one was taken, otherwise the tree as it is right now."""
+    if _GIT_AT_START is not None:
+        return dict(_GIT_AT_START)
+    return {
+        "git_commit": git_commit(),
+        "git_branch": git_branch(),
+        "git_dirty": git_dirty(),
+    }
+
+
+def reset_git_snapshot() -> None:
+    """Drop the snapshot. Tests only."""
+    global _GIT_AT_START
+    _GIT_AT_START = None
 
 
 def git_branch() -> str | None:
@@ -205,9 +271,9 @@ def identity_block(
         "config_hash": config_hash_,
         "content_sha256": content_sha256,
         "artifact": artifact,
-        "git_commit": git_commit(),
-        "git_branch": git_branch(),
-        "git_dirty": git_dirty(),
+        # The state at process entry, not at write time -- writing the artifact
+        # dirties the tree it would otherwise be reporting on.
+        **git_state(),
     }
 
 
@@ -292,9 +358,7 @@ class RunProvenance:
             content_sha256=content_sha256,
             artifact=artifact,
             config=config,
-            git_commit=git_commit(),
-            git_dirty=git_dirty(),
-            git_branch=git_branch(),
+            **git_state(),
             wall_clock_seconds=float(wall_clock_seconds),
             param_count=int(param_count),
             flops_per_inference=int(flops_per_inference),

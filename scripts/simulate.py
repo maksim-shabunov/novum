@@ -28,7 +28,7 @@ from core import paths
 from core.config import ConfigError, load_config
 from core.logging_utils import get_logger, human_duration, setup_logging
 from core.models.registry import load_model, read_artifact_meta
-from core.provenance import git_commit
+from core.provenance import git_commit, snapshot_git_state
 from sim import policy
 from sim.mission import DEFAULT_MISSION_SPLITS, build_mission
 from sim.window import SimConfig, SimResult, replay, write_windows_jsonl
@@ -801,6 +801,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     setup_logging(args.log_level, force=args.log_level is not None)
+    # Freeze git state before anything is written: writing an artifact
+    # dirties the tree the sidecar would otherwise report on.
+    snapshot_git_state()
 
     methods = [m.strip() for m in args.methods.split(",") if m.strip()]
     unknown = set(methods) - set(policy.METHODS)

@@ -28,7 +28,12 @@ from core.config import ConfigError, load_config, parse_overrides, resolved_conf
 from core.dataset import ChunkedArray, load_array
 from core.logging_utils import get_logger, human_bytes, human_duration, setup_logging
 from core.models.registry import build_model
-from core.provenance import RunProvenance, Timer, sidecar_path_for
+from core.provenance import (
+    RunProvenance,
+    Timer,
+    sidecar_path_for,
+    snapshot_git_state,
+)
 
 log = get_logger("novum.train")
 
@@ -71,6 +76,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     setup_logging(args.log_level, force=args.log_level is not None)
+    # Freeze git state before anything is written: writing an artifact
+    # dirties the tree the sidecar would otherwise report on.
+    snapshot_git_state()
 
     # -- config -------------------------------------------------------------
     try:
