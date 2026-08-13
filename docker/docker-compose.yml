@@ -61,16 +61,18 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.web
+      args:
+        # BUILD arg, not a runtime environment variable: Next inlines every
+        # NEXT_PUBLIC_* value into the client bundle at build time, so setting
+        # this under `environment:` would be silently ignored. It is the
+        # BROWSER that resolves this address, not the container, so it is a
+        # host address rather than the compose service name.
+        NEXT_PUBLIC_NOVUM_API: "${NOVUM_PUBLIC_API:-http://127.0.0.1:8000}"
     image: novum-web:latest
     container_name: novum-web
     restart: unless-stopped
     ports:
       - "${NOVUM_WEB_PORT:-3000}:3000"
-    environment:
-      # Where the browser reaches the briefing endpoint. It is the BROWSER that
-      # resolves this, not the container, so it is a host address rather than
-      # the compose service name.
-      NEXT_PUBLIC_NOVUM_API: "${NOVUM_PUBLIC_API:-http://127.0.0.1:8000}"
     depends_on:
       api:
         condition: service_started

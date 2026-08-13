@@ -28,6 +28,17 @@ RUN test -f public/data/grid.json || { \
     }
 
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# WHERE THE BROWSER FINDS THE API IS A BUILD-TIME DECISION, not a runtime one.
+# Next inlines every NEXT_PUBLIC_* value into the client bundle during `npm run
+# build`, so setting this in compose's `environment:` would have done exactly
+# nothing -- it would have worked by accident on a laptop, where the default is
+# already right, and silently failed for anyone serving from a real hostname.
+# Passed as a build arg it is genuinely configurable:
+#     docker compose build --build-arg NEXT_PUBLIC_NOVUM_API=https://api.example.com
+ARG NEXT_PUBLIC_NOVUM_API=http://127.0.0.1:8000
+ENV NEXT_PUBLIC_NOVUM_API=${NEXT_PUBLIC_NOVUM_API}
+
 RUN npm run build
 
 
