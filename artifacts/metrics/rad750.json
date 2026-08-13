@@ -6,12 +6,12 @@
   "config_hash": "cff187eea64af75bbb02b5858d46075a216e2d300df1e2347cf07e512c1c7841",
   "content_sha256": "e87d52121be6ad278a9146b6662d7a148b7714731f1c4fe6f9a73125988fa79e",
   "artifact": "/tmp/artifacts/rad750.npz",
-  "git_commit": "5b589a70c04962d16a0e492ea3e72e522bbd42be",
+  "git_commit": "da2e3a29ba14dd2989a8b97f0b2b38294d3bfdb6",
   "git_branch": "submission",
   "git_dirty": false,
   "kind": "evaluation",
   "artifact_sha256": "12cd4bde78dea742540ec40c848df35b0b2385c06c67513406fb77dcca31b021",
-  "evaluated_utc": "2026-08-13T10:15:17Z",
+  "evaluated_utc": "2026-08-13T10:49:27Z",
   "typical_split": "test_typical",
   "novel_split": "test_novel_all",
   "window": {
@@ -96,6 +96,6 @@
     "param_count": 399372,
     "flops_per_inference": 866432,
     "cycles_per_inference": 2599296.0,
-    "wall_clock_seconds": 31.656
+    "wall_clock_seconds": 39.412
   }
 }

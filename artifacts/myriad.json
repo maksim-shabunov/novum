@@ -4,14 +4,14 @@
   "tier": "myriad",
   "model_type": "conv_ae_myriad",
   "config_hash": "65c586c3b4a1b8dee2be11f9918cb41d410890cf4fe7008d6465631a0eec9826",
-  "content_sha256": "be5d88168d5c08e5810e6d51a8d98374ed44379b3d16589182c228ab29a80050",
+  "content_sha256": "180ea68cacdd3a54f7c0cf7f96d8d1fdce7f247e8232faea6b760f40b5545624",
   "artifact": "/tmp/artifacts/myriad.npz",
-  "git_commit": "5b589a70c04962d16a0e492ea3e72e522bbd42be",
+  "git_commit": "da2e3a29ba14dd2989a8b97f0b2b38294d3bfdb6",
   "git_branch": "submission",
   "git_dirty": false,
   "kind": "training",
-  "created_utc": "2026-08-13T10:16:43Z",
-  "wall_clock_seconds": 119.656,
+  "created_utc": "2026-08-13T10:50:08Z",
+  "wall_clock_seconds": 83.861,
   "param_count": 543797,
   "flops_per_inference": 9428992,
   "fits_compute_budget": true,
@@ -23,19 +23,19 @@
     "fits_compute_budget": true,
     "budget_utilisation": 0.02357248
   },
-  "peak_rss_bytes": 2123026432,
-  "peak_rss_mib": 2024.7,
+  "peak_rss_bytes": 2132942848,
+  "peak_rss_mib": 2034.1,
   "n_train_samples": 9302,
   "seed": 0,
   "training": {
     "epochs_run": 17,
     "best_epoch": 12,
-    "best_val_loss": 0.2040928069532577,
-    "final_train_loss": 0.15684713651367066,
+    "best_val_loss": 0.20372960566327572,
+    "final_train_loss": 0.15686699192489612,
     "early_stopped": true,
     "val_source": "validation_typical",
     "n_train_used": 9302,
-    "train_seconds": 110.84
+    "train_seconds": 77.79
   },
   "environment": {
     "python": "3.12.10",
@@ -109,6 +109,6 @@
   },
   "extra": {
     "train_split": "train_typical",
-    "artifact_bytes": 2026058
+    "artifact_bytes": 2025909
   }
 }

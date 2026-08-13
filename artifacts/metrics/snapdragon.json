@@ -6,12 +6,12 @@
   "config_hash": "fc7c03f2306c9f6045159f620dd4998a12d7194a737ba775edc5da9b618f5140",
   "content_sha256": "c5da2e3665930f3f2ca67603a3d7f9e842326f172cbab6a90c52b866d4fe8449",
   "artifact": "/tmp/artifacts/snapdragon.npz",
-  "git_commit": "5b589a70c04962d16a0e492ea3e72e522bbd42be",
+  "git_commit": "da2e3a29ba14dd2989a8b97f0b2b38294d3bfdb6",
   "git_branch": "submission",
   "git_dirty": false,
   "kind": "evaluation",
-  "artifact_sha256": "2569126f2f40f6df7827e93dc149f724eea4aba51edee5027383140cd1f28840",
-  "evaluated_utc": "2026-08-13T10:22:44Z",
+  "artifact_sha256": "38aa834274f2baadf12209ac624a386098078780e9b009cd4fa0a4c942f08eb4",
+  "evaluated_utc": "2026-08-13T10:54:13Z",
   "typical_split": "test_typical",
   "novel_split": "test_novel_all",
   "window": {
@@ -96,6 +96,6 @@
     "param_count": 2294871,
     "flops_per_inference": 49209344,
     "cycles_per_inference": 4920934.4,
-    "wall_clock_seconds": 475.964
+    "wall_clock_seconds": 323.349
   }
 }

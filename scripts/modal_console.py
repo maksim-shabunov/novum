@@ -48,6 +48,11 @@ UPLOAD_PATHS = (
     ("data/processed/train_typical.npy", "processed/train_typical.npy"),
     ("data/processed/test_typical.npy", "processed/test_typical.npy"),
     ("data/processed/test_novel_all.npy", "processed/test_novel_all.npy"),
+    # The per-class ROC AUC breakdown in results/RESULTS.md is computed against
+    # this split. Without it `scripts.evaluate` still succeeds -- it just omits
+    # per_class_roc_auc -- and `make report` then refuses the whole sweep. A
+    # missing input that degrades quietly is worse than one that crashes.
+    ("data/processed/test_novel_byclass.npy", "processed/test_novel_byclass.npy"),
     ("data/processed/validation_typical.npy", "processed/validation_typical.npy"),
     ("data/processed/manifest.csv", "processed/manifest.csv"),
     ("data/processed/meta.json", "processed/meta.json"),

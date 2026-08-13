@@ -6,12 +6,12 @@
   "config_hash": "fc7c03f2306c9f6045159f620dd4998a12d7194a737ba775edc5da9b618f5140",
   "content_sha256": "c5da2e3665930f3f2ca67603a3d7f9e842326f172cbab6a90c52b866d4fe8449",
   "artifact": "/tmp/artifacts/snapdragon.npz",
-  "git_commit": "5b589a70c04962d16a0e492ea3e72e522bbd42be",
+  "git_commit": "da2e3a29ba14dd2989a8b97f0b2b38294d3bfdb6",
   "git_branch": "submission",
   "git_dirty": false,
   "kind": "training",
-  "created_utc": "2026-08-13T10:22:40Z",
-  "wall_clock_seconds": 475.964,
+  "created_utc": "2026-08-13T10:54:08Z",
+  "wall_clock_seconds": 323.349,
   "param_count": 2294871,
   "flops_per_inference": 49209344,
   "fits_compute_budget": true,
@@ -23,8 +23,8 @@
     "fits_compute_budget": true,
     "budget_utilisation": 0.0024604672
   },
-  "peak_rss_bytes": 2322354176,
-  "peak_rss_mib": 2214.8,
+  "peak_rss_bytes": 2348933120,
+  "peak_rss_mib": 2240.1,
   "n_train_samples": 9302,
   "seed": 0,
   "training": {
@@ -35,7 +35,7 @@
     "early_stopped": true,
     "val_source": "validation_typical",
     "n_train_used": 9302,
-    "train_seconds": 467.28
+    "train_seconds": 316.41
   },
   "environment": {
     "python": "3.12.10",
@@ -109,6 +109,6 @@
   },
   "extra": {
     "train_split": "train_typical",
-    "artifact_bytes": 8541435
+    "artifact_bytes": 8541433
   }
 }
