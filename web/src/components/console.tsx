@@ -34,7 +34,7 @@ export function Console() {
   const [grid, setGrid] = useState<Grid | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
-  const [windowIndex, setWindowIndex] = useState<number | null>(null);
+  const [picked, setPicked] = useState<number | null>(null);
   const [hovered, setHovered] = useState<Frame | null>(null);
 
   useEffect(() => {
@@ -53,12 +53,18 @@ export function Console() {
   const cell = grid && selection ? getCell(grid, selection) : undefined;
 
   // Land on the fullest window: a buffer argued with six thumbnails is not
-  // argued at all. Recomputed when the configuration changes, but only when the
-  // user has not picked a window themselves.
-  const [pinned, setPinned] = useState(false);
-  useEffect(() => {
-    if (mission && cell && !pinned) setWindowIndex(mostLoadedWindow(mission, cell));
-  }, [mission, cell, pinned]);
+  // argued at all. The user's own pick wins while it stands, and changing a
+  // control clears it (see `onChange` below) so the next configuration gets its
+  // own fullest window.
+  //
+  // Derived rather than pushed into state by an effect. The effect version had
+  // to re-enter render to place the initial window, and "which window are we
+  // looking at" then had two owners that could disagree for a frame.
+  const autoWindow = useMemo(
+    () => (mission && cell ? mostLoadedWindow(mission, cell) : null),
+    [mission, cell],
+  );
+  const windowIndex = picked ?? autoWindow;
 
   const current = useMemo(() => {
     if (!mission || !cell || windowIndex === null) return null;
@@ -124,7 +130,7 @@ export function Console() {
           selection={selection}
           onChange={(next) => {
             setSelection(next);
-            setPinned(false);
+            setPicked(null);
           }}
         />
       </section>
@@ -159,10 +165,7 @@ export function Console() {
           selection={selection}
           cell={cell}
           window={windowIndex}
-          onWindow={(w) => {
-            setWindowIndex(w);
-            setPinned(true);
-          }}
+          onWindow={setPicked}
         />
       </section>
 

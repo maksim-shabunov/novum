@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import type { Selection } from "@/lib/console-data";
+import { cellKey, type Selection } from "@/lib/console-data";
 
 /**
  * The ground-side operator briefing for whatever is currently selected.
@@ -30,7 +30,14 @@ const API = process.env.NEXT_PUBLIC_NOVUM_API ?? "http://127.0.0.1:8000";
 
 export function BriefPanel({ selection }: { selection: Selection }) {
   const [brief, setBrief] = useState<BriefResponse | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failedFor, setFailedFor] = useState<string | null>(null);
+
+  // Which selection the failure belongs to, rather than a bare boolean the
+  // effect has to reset on the way in. Selecting a different cell then clears a
+  // stale error by arithmetic instead of by an extra render pass -- the
+  // synchronous setState this effect used to open with.
+  const selectionKey = cellKey(selection);
+  const failed = failedFor === selectionKey;
 
   useEffect(() => {
     const params = new URLSearchParams({
@@ -41,15 +48,14 @@ export function BriefPanel({ selection }: { selection: Selection }) {
       policy: selection.policy,
     });
     let live = true;
-    setFailed(false);
     fetch(`${API}/api/brief?${params}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((data: BriefResponse) => live && setBrief(data))
-      .catch(() => live && setFailed(true));
+      .catch(() => live && setFailedFor(selectionKey));
     return () => {
       live = false;
     };
-  }, [selection]);
+  }, [selection, selectionKey]);
 
   return (
     <Card className="flex h-full min-h-0 flex-col gap-0 overflow-hidden py-0">
