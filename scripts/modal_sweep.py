@@ -95,41 +95,47 @@ def _prepare_container(git: dict[str, str]) -> None:
 @app.function(image=image, volumes={str(VOLUME_MOUNT): volume}, cpu=CPU_COUNT,
               memory=16384,
               timeout=60 * 45)
-def train_tier(tier: str, seeds: list[int], git: dict[str, str]) -> dict[str, bytes]:
-    """Train one tier at every seed, evaluate each, return the files.
+def sweep_tier(tier: str, seeds: list[int], git: dict[str, str]) -> dict[str, bytes]:
+    """Sweep one tier across every seed and return the files it produced.
 
-    One tier per container so the three run concurrently: snapdragon dominates
-    the wall clock and there is no reason for rad750 to wait behind it.
+    Calls `scripts.sweep`, NOT a reimplementation of it. An earlier version
+    looped over train + evaluate here, which trained the right models and wrote
+    the per-seed metrics to the wrong place -- results/RESULTS.md reads
+    `runs/sweep/<id>/metrics/<tier>-s<seed>.json` for its +/- spread, and got
+    none of them. The rule that keeps the local and remote paths honest is the
+    same one modal_console follows: call the real entry point, ship its output.
+
+    One tier per container so the three run concurrently; snapdragon dominates
+    the wall clock and rad750 has no reason to wait behind it.
     """
     import subprocess
 
     _prepare_container(git)
-    out: dict[str, bytes] = {}
+    sweep_dir = Path("/tmp/sweep")
 
-    for seed in seeds:
-        artifact = Path("/tmp/artifacts") / f"{tier}.npz"
-        subprocess.run(
-            [
-                sys.executable, "-m", "scripts.train",
-                "--config", f"/app/configs/tier_{tier}.yaml",
-                "--out", str(artifact), "--seed", str(seed),
-            ],
-            cwd="/app", check=True,
-        )
-        subprocess.run(
-            [sys.executable, "-m", "scripts.evaluate", "--artifact", str(artifact)],
-            cwd="/app", check=True,
-        )
-        # Seed 0 is the published artifact; the others exist for the spread.
-        if seed == seeds[0]:
-            out[f"artifacts/{tier}.npz"] = artifact.read_bytes()
-            out[f"artifacts/{tier}.json"] = artifact.with_suffix(".json").read_bytes()
-            metrics = Path("/tmp/artifacts/metrics") / f"{tier}.json"
-            if metrics.is_file():
-                out[f"artifacts/metrics/{tier}.json"] = metrics.read_bytes()
-        # Every seed's metrics feed the +/- spread in results/RESULTS.md.
-        for path in Path("/tmp/runs").rglob("*.json"):
-            out[f"runs/{path.relative_to('/tmp/runs')}"] = path.read_bytes()
+    subprocess.run(
+        [
+            sys.executable, "-m", "scripts.sweep",
+            "--tiers", tier,
+            "--seeds", ",".join(str(s) for s in seeds),
+            "--out-dir", str(sweep_dir),
+        ],
+        cwd="/app", check=True,
+    )
+
+    out: dict[str, bytes] = {}
+    # The published artifact and its evaluation metrics.
+    for name in (f"{tier}.npz", f"{tier}.json"):
+        path = Path("/tmp/artifacts") / name
+        if path.is_file():
+            out[f"artifacts/{name}"] = path.read_bytes()
+    metrics = Path("/tmp/artifacts/metrics") / f"{tier}.json"
+    if metrics.is_file():
+        out[f"artifacts/metrics/{tier}.json"] = metrics.read_bytes()
+
+    # Per-seed metrics: the spread in results/RESULTS.md is made of these.
+    for path in sweep_dir.rglob("*.json"):
+        out[f"runs/sweep/latest/{path.relative_to(sweep_dir)}"] = path.read_bytes()
 
     return out
 
@@ -167,7 +173,7 @@ def main(seeds: str = "0,1,2", out: str = "") -> None:
 
     seed_list = [int(s) for s in seeds.split(",") if s.strip()]
     written = 0
-    for files in train_tier.starmap([(t, seed_list, git) for t in TIERS]):
+    for files in sweep_tier.starmap([(t, seed_list, git) for t in TIERS]):
         for name, payload in sorted(files.items()):
             path = root / name
             path.parent.mkdir(parents=True, exist_ok=True)

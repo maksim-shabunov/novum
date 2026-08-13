@@ -45,7 +45,7 @@ What that actually costs, measured rather than promised:
 
 | Step | Time | Note |
 |---|---|---|
-| `git clone --depth 1` | ~10 s | 20 MB. A full clone is 142 MB — history holds the binary artifacts. |
+| `git clone --depth 1` | seconds | **33 MB** — 14 MB pack, 19 MB working tree. A full clone is 156 MB; history holds every version of the binary artifacts. |
 | `npm ci` + `next build` | ~15 s | measured from a fresh clone |
 | API image | ~1 min | pip install of fastapi, uvicorn, numpy — no torch |
 | **Console usable** | **well under a minute** after the images exist | |
