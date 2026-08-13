@@ -158,6 +158,33 @@ def test_an_unknown_key_is_an_error_not_a_silent_pass(figures, tmp_path) -> None
 
 
 def test_every_figure_names_where_it_came_from(figures) -> None:
+    """A figure whose source cannot be opened is a figure nobody can check.
+
+    The source is a file for a single-run figure and a directory for one
+    aggregated across seeds; either way it has to exist on disk.
+    """
     for key, fig in figures.items():
         assert fig.source, f"{key} has no source"
-        assert fig.source.endswith(".json"), f"{key} source is not an artifact: {fig.source}"
+        path = paths.PROJECT_ROOT / fig.source
+        assert path.exists(), f"{key} cites {fig.source}, which does not exist"
+
+
+def test_a_multi_word_figure_is_compared_whole(figures, tmp_path) -> None:
+    """`0.720 ± 0.004` is one value, not a bare standard deviation.
+
+    The marker sits after the whole phrase, so the checker must read back as
+    many words as the figure has -- otherwise it silently compared "0.004"
+    against "0.720 ± 0.004" and reported a disagreement that was its own.
+    """
+    fig = figures.get("RAD750_ROC_AUC_SPREAD")
+    if fig is None:
+        pytest.skip("no sweep spread in this run")
+    assert " " in fig.text
+
+    good = tmp_path / "good.md"
+    good.write_text(f"| {fig.text}<!--@RAD750_ROC_AUC_SPREAD--> |\n", encoding="utf-8")
+    assert check_document(good, figures) == []
+
+    bad = tmp_path / "bad.md"
+    bad.write_text("| 0.111 ± 0.999<!--@RAD750_ROC_AUC_SPREAD--> |\n", encoding="utf-8")
+    assert check_document(bad, figures)

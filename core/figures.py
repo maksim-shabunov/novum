@@ -308,6 +308,55 @@ def _static_figures(src_dir: Path) -> list[Figure]:
     return out
 
 
+def _sweep_figures() -> list[Figure]:
+    """Mean +/- sd across seeds, as results/RESULTS.md and the README quote them.
+
+    These come from the sweep rather than from `artifacts/metrics/`, which holds
+    one seed. Without them the README's headline table was the one place a real
+    figure could drift unnoticed -- retraining moved myriad's p@window from
+    0.745 to 0.747 and nothing complained, because an unmarked number is a
+    number the checker cannot see.
+    """
+    import statistics
+
+    metrics_dir = paths.runs_dir() / "sweep" / "latest" / "metrics"
+    if not metrics_dir.is_dir():
+        return []
+
+    by_tier: dict[str, dict[str, list[float]]] = {}
+    for path in sorted(metrics_dir.glob("*.json")):
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        tier = record.get("tier")
+        if not tier:
+            continue
+        metrics = record.get("metrics", {})
+        slot = by_tier.setdefault(tier, {})
+        for key in ("roc_auc", "precision_at_window"):
+            if key in metrics:
+                slot.setdefault(key, []).append(float(metrics[key]))
+
+    src = str(paths.rel(metrics_dir))
+    out: list[Figure] = []
+    for tier, metrics in by_tier.items():
+        for key, digits in (("roc_auc", 3), ("precision_at_window", 3)):
+            values = metrics.get(key) or []
+            if len(values) < 2:
+                continue
+            mean = statistics.fmean(values)
+            sd = statistics.stdev(values)
+            out.append(
+                Figure(
+                    f"{tier.upper()}_{key.upper()}_SPREAD", mean,
+                    f"{mean:.{digits}f} ± {sd:.{digits}f}", src,
+                    f"{len(values)} seeds",
+                )
+            )
+    return out
+
+
 def published_figures(run_dir: str | None = None) -> dict[str, Figure]:
     """Every figure the documents are allowed to quote, keyed by name."""
     path = Path(run_dir) if run_dir else _latest_sim_run()
@@ -318,6 +367,7 @@ def published_figures(run_dir: str | None = None) -> dict[str, Figure]:
     figures += _yield_figures(summary, src)
     figures += _compute_figures(summary, src)
     figures += _static_figures(paths.artifacts_dir() / "metrics")
+    figures += _sweep_figures()
 
     mission = summary.get("mission", {})
     if mission:

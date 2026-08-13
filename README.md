@@ -329,8 +329,8 @@ deliberate friction, because a number nobody can source is a number nobody
 should print.
 
 **The published numbers on this page were produced by simulation run
-`20260811-092134`<!--@SIM_RUN_ID-->** from commit
-`8006e687`<!--@SIM_GIT_COMMIT-->. `make check-figures --list` prints every figure
+`20260813-120553`<!--@SIM_RUN_ID-->** from commit
+`339de2e9`<!--@SIM_GIT_COMMIT-->. `make check-figures --list` prints every figure
 with its source file.
 
 ## Model tiers
@@ -379,9 +379,9 @@ it get transmitted — precision at exactly that k is what the downlink delivers
 
 | tier | p@window (162) | ROC AUC natural | ROC AUC rover | ROC AUC aggregate | FLOPs/inf | fits a RAD750? |
 |---|---|---|---|---|---|---|
-| rad750 | 0.702 ± 0.003 | 0.887 | 0.478 | 0.639<!--@RAD750_ROC_AUC--> ± 0.001 | 0.87 M | **yes** (13%) |
-| myriad | **0.745 ± 0.010** | 0.888 | **0.534** | **0.673 ± 0.002** | 9.4 M | no — 1.4× over |
-| snapdragon | 0.718 ± 0.003 | 0.889 | 0.498 | 0.651 ± 0.005 | 49.2 M | no — 7.4× over |
+| rad750 | 0.702 ± 0.004<!--@RAD750_PRECISION_AT_WINDOW_SPREAD--> | 0.887 | 0.478 | 0.639 ± 0.001<!--@RAD750_ROC_AUC_SPREAD--> | 0.87 M | **yes** (13%) |
+| myriad | **0.747 ± 0.011**<!--@MYRIAD_PRECISION_AT_WINDOW_SPREAD--> | 0.888 | **0.534** | **0.673 ± 0.002**<!--@MYRIAD_ROC_AUC_SPREAD--> | 9.4 M | no — 1.4× over |
+| snapdragon | 0.720 ± 0.004<!--@SNAPDRAGON_PRECISION_AT_WINDOW_SPREAD--> | 0.889 | 0.498 | 0.651 ± 0.006<!--@SNAPDRAGON_ROC_AUC_SPREAD--> | 49.2 M | no — 7.4× over |
 
 The k choice is not cosmetic — it decides the winner. At k=10 snapdragon looks
 perfect (1.000 ± 0.000, vs 0.867 for the others) and leading with that number
@@ -408,7 +408,7 @@ Four findings, in the order they matter:
 3. **More compute is not monotone.** The snapdragon model — 4× the params, 5×
    the FLOPs of myriad — is *worse* than myriad on rover-made novelty (0.498)
    and on the aggregate (0.651) — and at the operational point it loses too:
-   p@162 of 0.718 vs myriad's 0.745. Where it wins is the extreme top of the
+   p@162 of 0.720 vs myriad's 0.747. Where it wins is the extreme top of the
    ranking: **precision@10 = 1.000 across every seed** (myriad 0.867). The
    big model is more certain about its most confident picks and no better at
    filling a real downlink window. At the 162-frame window the shipped configs

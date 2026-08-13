@@ -26,9 +26,11 @@ from pathlib import Path
 from core import paths
 from core.figures import FiguresUnavailable, published_figures
 
-#: `text<!--@KEY-->`. The captured group is the rendered figure immediately
-#: before the marker, emphasis and all.
-MARKER_RE = re.compile(r"(?P<text>[^\s<>]+)[ \t]*<!--@(?P<key>[A-Z0-9_]+)-->")
+#: `…text<!--@KEY-->`. Everything before the marker on its line is captured; how
+#: much of it belongs to the figure depends on the figure, so the comparison
+#: takes as many trailing words as the expected value has. A single-token figure
+#: like `55.6%` reads back one word; `0.720 ± 0.004` reads back three.
+MARKER_RE = re.compile(r"(?P<before>[^<>]*)<!--@(?P<key>[A-Z0-9_]+)-->")
 
 #: Markdown decoration that is presentation, not value.
 _DECORATION = "*_`~ \t"
@@ -51,7 +53,11 @@ DEFAULT_DOCS = (
 
 
 def _strip(text: str) -> str:
-    """The bare figure, with markdown emphasis and adjacent punctuation removed."""
+    """The bare figure, with markdown emphasis and adjacent punctuation removed.
+
+    Only the ends are stripped: a multi-word figure like `0.720 ± 0.004` has to
+    survive intact, decoration and all, because the value is the whole phrase.
+    """
     for _ in range(3):   # e.g.  **(0.556**  -> emphasis, bracket, emphasis
         text = text.strip(_DECORATION)
         text = text.lstrip(_LEFT_PUNCT).rstrip(_RIGHT_PUNCT)
@@ -68,7 +74,6 @@ def check_document(path: Path, figures: dict) -> list[str]:
     for lineno, line in enumerate(text.splitlines(), start=1):
         for match in MARKER_RE.finditer(line):
             key = match.group("key")
-            written = _strip(match.group("text"))
             figure = figures.get(key)
             if figure is None:
                 problems.append(
@@ -76,6 +81,10 @@ def check_document(path: Path, figures: dict) -> list[str]:
                     "add it to core.figures or remove the marker"
                 )
                 continue
+
+            n_words = len(figure.text.split())
+            words = match.group("before").split()
+            written = _strip(" ".join(words[-n_words:])) if words else ""
             if written != figure.text:
                 problems.append(
                     f"{paths.rel(path)}:{lineno}: {key} says {written!r} but "

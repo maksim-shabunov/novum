@@ -4,14 +4,14 @@
   "tier": "rad750",
   "model_type": "pca",
   "config_hash": "cff187eea64af75bbb02b5858d46075a216e2d300df1e2347cf07e512c1c7841",
-  "content_sha256": "e87d52121be6ad278a9146b6662d7a148b7714731f1c4fe6f9a73125988fa79e",
+  "content_sha256": "284071030a72b3eb9a4c817f5e7a2df90922a329b8d1e97d44576316ffc751c9",
   "artifact": "/tmp/artifacts/rad750.npz",
-  "git_commit": "da2e3a29ba14dd2989a8b97f0b2b38294d3bfdb6",
+  "git_commit": "339de2e94fad65af328aa9bee9c33f11efd50d94",
   "git_branch": "submission",
   "git_dirty": false,
   "kind": "evaluation",
-  "artifact_sha256": "12cd4bde78dea742540ec40c848df35b0b2385c06c67513406fb77dcca31b021",
-  "evaluated_utc": "2026-08-13T10:49:27Z",
+  "artifact_sha256": "36e4024143d8c3564b270c61db0dee669f04d61590904c497b548bdb045ee60b",
+  "evaluated_utc": "2026-08-13T11:35:09Z",
   "typical_split": "test_typical",
   "novel_split": "test_novel_all",
   "window": {
@@ -78,7 +78,52 @@
       "label_counts": {}
     }
   },
-  "per_class_roc_auc": {},
+  "per_class_roc_auc": {
+    "bedrock": {
+      "n": 11,
+      "roc_auc": 0.8369611609048229
+    },
+    "broken-rock": {
+      "n": 76,
+      "roc_auc": 0.9141030392883618
+    },
+    "drill-hole": {
+      "n": 62,
+      "roc_auc": 0.5991216113887626
+    },
+    "drt": {
+      "n": 111,
+      "roc_auc": 0.42327538806412046
+    },
+    "dump-pile": {
+      "n": 93,
+      "roc_auc": 0.46340047453177846
+    },
+    "edge_cases": {
+      "n": 3,
+      "roc_auc": 0.6251956181533647
+    },
+    "float": {
+      "n": 18,
+      "roc_auc": 0.8810641627543035
+    },
+    "meteorite": {
+      "n": 34,
+      "roc_auc": 0.7964650648991991
+    },
+    "other": {
+      "n": 1,
+      "roc_auc": 0.27230046948356806
+    },
+    "scuff": {
+      "n": 12,
+      "roc_auc": 0.6652973395931142
+    },
+    "veins": {
+      "n": 30,
+      "roc_auc": 0.9410015649452269
+    }
+  },
   "reference": {
     "roc_auc": 0.65,
     "source": "Kerner et al. 2020, conv autoencoder on Mastcam novelty (ROC AUC 0.65)"
@@ -96,6 +141,6 @@
     "param_count": 399372,
     "flops_per_inference": 866432,
     "cycles_per_inference": 2599296.0,
-    "wall_clock_seconds": 39.412
+    "wall_clock_seconds": 27.925
   }
 }

@@ -4,14 +4,14 @@
   "tier": "snapdragon",
   "model_type": "conv_ae_snapdragon",
   "config_hash": "fc7c03f2306c9f6045159f620dd4998a12d7194a737ba775edc5da9b618f5140",
-  "content_sha256": "c5da2e3665930f3f2ca67603a3d7f9e842326f172cbab6a90c52b866d4fe8449",
+  "content_sha256": "c5edb96b08abf2c48a801a6ae91eb8906faacfc9daeda6c167942f6a6c5aef9b",
   "artifact": "/tmp/artifacts/snapdragon.npz",
-  "git_commit": "da2e3a29ba14dd2989a8b97f0b2b38294d3bfdb6",
+  "git_commit": "339de2e94fad65af328aa9bee9c33f11efd50d94",
   "git_branch": "submission",
   "git_dirty": false,
   "kind": "evaluation",
-  "artifact_sha256": "38aa834274f2baadf12209ac624a386098078780e9b009cd4fa0a4c942f08eb4",
-  "evaluated_utc": "2026-08-13T10:54:13Z",
+  "artifact_sha256": "dabc8b21b26cb7acb1e0ce40dfb3aee10411c33c06929f80c974e8226be32819",
+  "evaluated_utc": "2026-08-13T11:40:19Z",
   "typical_split": "test_typical",
   "novel_split": "test_novel_all",
   "window": {
@@ -21,25 +21,25 @@
     "derivation": "8,000,000 bits / 49,152 bits/frame (64x64x6 x 8b / 4x compression) = 162 frames"
   },
   "metrics": {
-    "precision_at_window": 0.7098765432098766,
+    "precision_at_window": 0.7160493827160493,
     "window_frames": 162,
     "n_typical": 426,
     "n_novel": 430,
-    "roc_auc": 0.6539796921061252,
-    "average_precision": 0.6570505975172046,
+    "roc_auc": 0.6528714925210176,
+    "average_precision": 0.6567487602244122,
     "precision_at_k": {
       "10": 1.0,
       "25": 1.0,
-      "50": 0.84,
+      "50": 0.86,
       "100": 0.75,
-      "162": 0.7098765432098766
+      "162": 0.7160493827160493
     },
     "recall_at_k": {
       "10": 0.023255813953488372,
       "25": 0.05813953488372093,
-      "50": 0.09767441860465116,
+      "50": 0.1,
       "100": 0.1744186046511628,
-      "162": 0.26744186046511625
+      "162": 0.26976744186046514
     },
     "novel_rate": 0.5023364485981309,
     "per_class_roc_auc": {}
@@ -66,11 +66,11 @@
     },
     "natural": {
       "n": 169,
-      "roc_auc": 0.8881295663527516
+      "roc_auc": 0.8880740061671806
     },
     "rover": {
       "n": 261,
-      "roc_auc": 0.5023654057165471
+      "roc_auc": 0.5005756120374867
     },
     "excluded": {
       "n": 0,
@@ -78,7 +78,52 @@
       "label_counts": {}
     }
   },
-  "per_class_roc_auc": {},
+  "per_class_roc_auc": {
+    "bedrock": {
+      "n": 11,
+      "roc_auc": 0.8693982074263764
+    },
+    "broken-rock": {
+      "n": 76,
+      "roc_auc": 0.9248208549542871
+    },
+    "drill-hole": {
+      "n": 62,
+      "roc_auc": 0.5423292442829017
+    },
+    "drt": {
+      "n": 111,
+      "roc_auc": 0.46396396396396394
+    },
+    "dump-pile": {
+      "n": 93,
+      "roc_auc": 0.5147912564995709
+    },
+    "edge_cases": {
+      "n": 3,
+      "roc_auc": 0.6791862284820032
+    },
+    "float": {
+      "n": 18,
+      "roc_auc": 0.8836724047991653
+    },
+    "meteorite": {
+      "n": 34,
+      "roc_auc": 0.7553852526926264
+    },
+    "other": {
+      "n": 1,
+      "roc_auc": 0.3615023474178404
+    },
+    "scuff": {
+      "n": 12,
+      "roc_auc": 0.7779733959311425
+    },
+    "veins": {
+      "n": 30,
+      "roc_auc": 0.9548513302034429
+    }
+  },
   "reference": {
     "roc_auc": 0.65,
     "source": "Kerner et al. 2020, conv autoencoder on Mastcam novelty (ROC AUC 0.65)"
@@ -96,6 +141,6 @@
     "param_count": 2294871,
     "flops_per_inference": 49209344,
     "cycles_per_inference": 4920934.4,
-    "wall_clock_seconds": 323.349
+    "wall_clock_seconds": 335.519
   }
 }
