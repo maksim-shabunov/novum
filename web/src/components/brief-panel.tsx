@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -105,6 +105,60 @@ export function BriefPanel({ selection }: { selection: Selection }) {
 }
 
 /**
+ * Inline spans: `**bold**`, `` `code` `` and `*italic*`.
+ *
+ * The line-kind switch below owns block structure; this owns what happens
+ * inside a line. Without it the operator reads `**55.6%**` with the asterisks
+ * showing -- literal markup around the one figure this panel exists to present.
+ *
+ * Underscore emphasis is deliberately absent. `cum_science_yield` and
+ * `offline_requested` are ordinary words in this text, so an intra-word
+ * underscore must never open a span; the only `_..._` the generator emits wraps
+ * a whole line, and `unwrapWholeLine` takes it off before this runs.
+ */
+const INLINE = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g;
+
+function renderInline(text: string): ReactNode[] {
+  return text.split(INLINE).map((part, i) => {
+    if (!part) return null;
+    if (part.length > 4 && part.startsWith("**") && part.endsWith("**")) {
+      return (
+        <strong key={i} className="font-semibold text-foreground">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (part.length > 2 && part.startsWith("`") && part.endsWith("`")) {
+      return (
+        <code key={i} className="rounded bg-muted px-1 font-mono text-[0.95em]">
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    if (part.length > 2 && part.startsWith("*") && part.endsWith("*")) {
+      return <em key={i}>{part.slice(1, -1)}</em>;
+    }
+    return part;
+  });
+}
+
+/**
+ * A line that is emphasis end to end -- `*Run: 27 windows...*`, and the trailing
+ * `_⚠ OFFLINE REPORT ..._` -- is neither a bullet nor an inline span.
+ *
+ * Separating it out is what earns the inline pass its freedom to ignore
+ * underscores: the offline footer wraps a code span whose identifier contains
+ * one, and no general rule short of a real parser gets that right.
+ */
+function unwrapWholeLine(t: string): { body: string; emphasised: boolean } {
+  const delim = t.startsWith("_") ? "_" : t.startsWith("*") && !t.startsWith("**") ? "*" : "";
+  if (delim && t.length > 2 && t.endsWith(delim) && !t.endsWith(delim + delim)) {
+    return { body: t.slice(1, -1), emphasised: true };
+  }
+  return { body: t, emphasised: false };
+}
+
+/**
  * The brief's own structure is figure-lines and prose-lines (see
  * `core.ground.report_gen`), so rendering is a line-kind switch, not a markdown
  * parser. Keeping the two visually distinct is the point: measured quantities
@@ -127,7 +181,10 @@ function BriefText({ text }: { text: string }) {
             </h3>
           );
         }
-        if (t.startsWith("-") || t.startsWith("*")) {
+        // The delimiter must be followed by a space. `*Run: 27 windows...*` is a
+        // whole-line italic, and reading it as a bullet ate its opening asterisk
+        // and left the closing one on screen.
+        if (/^[-*]\s/.test(t)) {
           const body = t.replace(/^[-*]\s*/, "");
           const [label, ...rest] = body.split(":");
           return (
@@ -136,19 +193,23 @@ function BriefText({ text }: { text: string }) {
               <span>
                 {rest.length ? (
                   <>
-                    <span className="text-muted-foreground">{label}:</span>
-                    <span className="text-foreground">{rest.join(":")}</span>
+                    <span className="text-muted-foreground">{renderInline(label)}:</span>
+                    <span className="text-foreground">{renderInline(rest.join(":"))}</span>
                   </>
                 ) : (
-                  body
+                  renderInline(body)
                 )}
               </span>
             </div>
           );
         }
+        const { body, emphasised } = unwrapWholeLine(t);
         return (
-          <p key={i} className="text-xs leading-relaxed text-muted-foreground">
-            {t}
+          <p
+            key={i}
+            className={`text-xs leading-relaxed text-muted-foreground${emphasised ? " italic" : ""}`}
+          >
+            {renderInline(body)}
           </p>
         );
       })}
