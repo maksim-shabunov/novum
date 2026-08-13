@@ -26,16 +26,35 @@ from pathlib import Path
 
 import modal
 
-from scripts.modal_console import (
-    CPU_COUNT,
-    VOLUME_MOUNT,
-    VOLUME_NAME,
-    image,
-)
-
 APP_NAME = "novum-sweep"
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+# Defined here rather than imported from scripts.modal_console: Modal re-imports
+# the entrypoint module inside the container, where the repository is mounted at
+# /app and is not yet on sys.path, so a cross-script import at module scope
+# fails before anything can fix the path. Two short declarations beat a fragile
+# import order.
+VOLUME_NAME = "novum-data"
+VOLUME_MOUNT = Path("/vol")
+CPU_COUNT = 6
+
+image = (
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install(
+        "numpy>=1.26",
+        "pyyaml>=6.0",
+        "pandas>=2.0",
+        "pyarrow>=14.0",
+        "scikit-learn>=1.3",
+        "torch>=2.2",
+        extra_index_url="https://download.pytorch.org/whl/cpu",
+    )
+    .add_local_dir(PROJECT_ROOT / "core", "/app/core")
+    .add_local_dir(PROJECT_ROOT / "sim", "/app/sim")
+    .add_local_dir(PROJECT_ROOT / "scripts", "/app/scripts")
+    .add_local_dir(PROJECT_ROOT / "configs", "/app/configs")
+)
 
 TIERS = ("rad750", "myriad", "snapdragon")
 SEEDS = (0, 1, 2)
@@ -73,7 +92,8 @@ def _prepare_container(git: dict[str, str]) -> None:
             dst.write_bytes(src.read_bytes())
 
 
-@app.function(image=image, volumes={str(VOLUME_MOUNT): volume}, cpu=6, memory=16384,
+@app.function(image=image, volumes={str(VOLUME_MOUNT): volume}, cpu=CPU_COUNT,
+              memory=16384,
               timeout=60 * 45)
 def train_tier(tier: str, seeds: list[int], git: dict[str, str]) -> dict[str, bytes]:
     """Train one tier at every seed, evaluate each, return the files.
