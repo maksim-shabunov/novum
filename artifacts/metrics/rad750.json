@@ -3,15 +3,15 @@
   "name": "rad750",
   "tier": "rad750",
   "model_type": "pca",
-  "config_hash": "cfb40ed216f4a7a83316535603b4a1549535ae9c6c47aa41d77e4dd284ac526f",
-  "content_sha256": "8f22bd271ac08e21c2b9a001ad1a52b351594b2b6b2d0b5baf93b4d8ff83da06",
+  "config_hash": "24b4080d6333282e5f568646ceff561e542709fb7a88f0b426602e0d742e5907",
+  "content_sha256": "ba3b2fab27a24bf66f27b37e71a9ce0e10c66a4cdfdaf765070bb2f20c13ad75",
   "artifact": "artifacts/rad750.npz",
-  "git_commit": "08bb4770ac43fa7fe365b24070bb560fb1dabd88",
-  "git_branch": "main",
-  "git_dirty": true,
+  "git_commit": "5373badc053dac1eb4ed7dee7fc9b537680fb75c",
+  "git_branch": "submission",
+  "git_dirty": false,
   "kind": "evaluation",
-  "artifact_sha256": "23fb47de7fd88c234412104839444f314ead8c0c6f983ab3a42e1d8b442c13d9",
-  "evaluated_utc": "2026-08-06T11:46:12Z",
+  "artifact_sha256": "fdaa8be841bc517ce4178cbb9c72600edbff8a3c87cda1976f4ce0cfe45376dc",
+  "evaluated_utc": "2026-08-12T21:37:14Z",
   "typical_split": "test_typical",
   "novel_split": "test_novel_all",
   "window": {
@@ -141,6 +141,6 @@
     "param_count": 399372,
     "flops_per_inference": 866432,
     "cycles_per_inference": 2599296.0,
-    "wall_clock_seconds": 50.547
+    "wall_clock_seconds": 14.907
   }
 }

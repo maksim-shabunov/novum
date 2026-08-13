@@ -91,9 +91,24 @@ def _git(*args: str) -> str | None:
     return text or None if ok else None
 
 
+#: Set these when building somewhere the repository is not present -- a Docker
+#: image, a Modal container, CI. Without them a container-built artifact records
+#: `git_commit: null` and becomes untraceable, which is exactly the failure this
+#: whole field exists to prevent. The caller passes what it knows; git is asked
+#: only when nobody said.
+ENV_GIT_COMMIT = "NOVUM_GIT_COMMIT"
+ENV_GIT_BRANCH = "NOVUM_GIT_BRANCH"
+ENV_GIT_DIRTY = "NOVUM_GIT_DIRTY"
+
+
+def _env(name: str) -> str | None:
+    value = os.environ.get(name, "").strip()
+    return value or None
+
+
 def git_commit() -> str | None:
     """Current commit SHA, or None outside a repo (e.g. inside a built image)."""
-    return _git("rev-parse", "HEAD")
+    return _env(ENV_GIT_COMMIT) or _git("rev-parse", "HEAD")
 
 
 #: Directories this project WRITES. Changes here are the expected output of a
@@ -116,6 +131,10 @@ def git_dirty(*, sources_only: bool = True) -> bool | None:
     nothing about reproducibility either way. Pass False for the literal
     whole-tree answer.
     """
+    declared = _env(ENV_GIT_DIRTY)
+    if declared is not None:
+        return declared.lower() in ("1", "true", "yes")
+
     args = ["status", "--porcelain"]
     if sources_only:
         args += ["--", ".", *(f":(exclude){p}" for p in GENERATED_PATHS)]
@@ -173,7 +192,7 @@ def reset_git_snapshot() -> None:
 
 
 def git_branch() -> str | None:
-    return _git("rev-parse", "--abbrev-ref", "HEAD")
+    return _env(ENV_GIT_BRANCH) or _git("rev-parse", "--abbrev-ref", "HEAD")
 
 
 def peak_rss_bytes() -> int:

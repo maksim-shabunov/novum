@@ -30,14 +30,34 @@ is not accuracy.
 ### See it
 
 ```bash
-git clone <repo> && cd novum && docker compose -f docker/docker-compose.yml up
+git clone --depth 1 <repo> && cd novum
+docker compose -f docker/docker-compose.yml up
 ```
 
 A mission-control console on <http://localhost:3000>: what the rover captured on
-the left, what reached Earth on the right, the decision in between. No dataset
-download, no training step, no API key, no login. The full cross product of
+the left, what reached Earth on the right, the decision in between. **No dataset
+download, no training step, no API key, no login.** The full cross product of
 runs — 3 processors × 3 model tiers × 6 downlink budgets × 2 adaptation modes ×
-3 policies — is precomputed and committed, so every control responds instantly.
+3 policies, 324 replays — is precomputed and committed, so every control
+responds instantly.
+
+What that actually costs, measured rather than promised:
+
+| Step | Time | Note |
+|---|---|---|
+| `git clone --depth 1` | ~10 s | 20 MB. A full clone is 142 MB — history holds the binary artifacts. |
+| `npm ci` + `next build` | ~15 s | measured from a fresh clone |
+| API image | ~1 min | pip install of fastapi, uvicorn, numpy — no torch |
+| **Console usable** | **well under a minute** after the images exist | |
+
+The first `docker compose up` on a machine with no cached base images spends
+most of its time pulling `python:3.12-slim` and `node:22-slim`; that is network,
+not this project. Once built, `up` is a few seconds. If you have Python to hand
+and want to skip Docker entirely, `make web-install && make web` serves the same
+console from the same committed data.
+
+Without the API container the console still works — every panel is precomputed —
+and the mission brief says so rather than failing silently.
 
 ---
 

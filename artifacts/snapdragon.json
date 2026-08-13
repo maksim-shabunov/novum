@@ -3,15 +3,15 @@
   "name": "snapdragon",
   "tier": "snapdragon",
   "model_type": "conv_ae_snapdragon",
-  "config_hash": "71bd22cdc305e8829d838c3309ce7719dc7d5fa315c9fafff0112bbd12f0c2e2",
+  "config_hash": "1e26e2a863f78dc6e4ee508d1465af129c2da0be1dcd22f602cdde948b9d6e51",
   "content_sha256": "7180b13811fd5f2a6db1d064915099be2c5b04d6da0840bc3d7a66a3871b20db",
   "artifact": "artifacts/snapdragon.npz",
-  "git_commit": "40bd4f04642fe60c3a07a89feb7bd00d29dc806e",
+  "git_commit": "5373badc053dac1eb4ed7dee7fc9b537680fb75c",
   "git_branch": "submission",
   "git_dirty": true,
   "kind": "training",
-  "created_utc": "2026-08-12T21:24:34Z",
-  "wall_clock_seconds": 527.895,
+  "created_utc": "2026-08-12T21:53:30Z",
+  "wall_clock_seconds": 515.758,
   "param_count": 2294871,
   "flops_per_inference": 49209344,
   "fits_compute_budget": true,
@@ -23,8 +23,8 @@
     "fits_compute_budget": true,
     "budget_utilisation": 0.0024604672
   },
-  "peak_rss_bytes": 1736982528,
-  "peak_rss_mib": 1656.5,
+  "peak_rss_bytes": 1919418368,
+  "peak_rss_mib": 1830.5,
   "n_train_samples": 9302,
   "seed": 0,
   "training": {
@@ -35,7 +35,7 @@
     "early_stopped": true,
     "val_source": "validation_typical",
     "n_train_used": 9302,
-    "train_seconds": 526.23
+    "train_seconds": 514.33
   },
   "environment": {
     "python": "3.13.12",
@@ -105,10 +105,10 @@
       "compression_ratio": 4.0,
       "budget_bits_per_window": 8000000
     },
-    "_source": "configs/tier_snapdragon.yaml"
+    "_source": "/Users/maksim/Desktop/novum/configs/tier_snapdragon.yaml"
   },
   "extra": {
     "train_split": "train_typical",
-    "artifact_bytes": 8541765
+    "artifact_bytes": 8541766
   }
 }

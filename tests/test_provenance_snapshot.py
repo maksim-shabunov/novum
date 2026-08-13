@@ -139,3 +139,41 @@ def test_uncommitted_code_is_still_dirty(repo: Path) -> None:
     """And the field must keep its teeth."""
     (repo / "train.py").write_text("print('edited')", encoding="utf-8")
     assert provenance.git_dirty() is True
+
+
+# ---------------------------------------------------------------------------
+# Building where the repository is not present
+# ---------------------------------------------------------------------------
+
+
+def test_a_container_can_declare_the_commit_it_was_built_from(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A Modal or Docker build has no .git, so it must be told.
+
+    Without this a container-built artifact records git_commit: null and is
+    untraceable -- the exact failure the field exists to prevent.
+    """
+    monkeypatch.setenv(provenance.ENV_GIT_COMMIT, "deadbeefcafe")
+    monkeypatch.setenv(provenance.ENV_GIT_BRANCH, "submission")
+    monkeypatch.setenv(provenance.ENV_GIT_DIRTY, "false")
+    provenance.reset_git_snapshot()
+
+    assert provenance.git_commit() == "deadbeefcafe"
+    assert provenance.git_branch() == "submission"
+    assert provenance.git_dirty() is False
+
+
+def test_a_declared_dirty_tree_is_believed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The escape hatch must not be a way to always claim clean."""
+    monkeypatch.setenv(provenance.ENV_GIT_DIRTY, "true")
+    assert provenance.git_dirty() is True
+
+
+def test_the_local_repository_still_wins_when_nothing_is_declared(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for var in (provenance.ENV_GIT_COMMIT, provenance.ENV_GIT_BRANCH,
+                provenance.ENV_GIT_DIRTY):
+        monkeypatch.delenv(var, raising=False)
+    assert provenance.git_commit() is not None, "should read the real repository"

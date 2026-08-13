@@ -51,7 +51,7 @@ VARIANT     ?=
 .PHONY: help bootstrap doctor setup data fetch preprocess train sweep eval serve \
         test lint fmt lock simulate simulate-quick simulate-fixed-hw simulate-sweep report \
         report-mission check-llm check-figures figures console console-quick console-modal \
-        console-modal-upload web web-install web-build \
+        console-modal-upload sweep-modal web web-install web-build \
         docker-train docker-serve docker-build docker-down \
         clean clean-data clean-venv guard-venv check-python check-deps
 
@@ -173,6 +173,9 @@ console-quick: guard-venv ## One tier, two budgets: a smoke test of the console 
 # The grid is 324 replays and the slow ones refit an autoencoder seven times.
 # That is a few minutes on real cores and an afternoon on a busy laptop, so
 # `make console-modal` runs the identical build in a container instead.
+sweep-modal: guard-venv ## Run the (tier x seed) sweep on Modal instead of locally
+	$(BIN)/modal run scripts/modal_sweep.py
+
 console-modal-upload: guard-venv ## Push frames + artifacts to the Modal volume (once)
 	$(PY) -m scripts.modal_console
 

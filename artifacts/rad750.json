@@ -3,15 +3,15 @@
   "name": "rad750",
   "tier": "rad750",
   "model_type": "pca",
-  "config_hash": "c95c08b1323ebff1f2bcef5f96420f5a6ce2e686d3d637b969d74f7cfc4010f8",
+  "config_hash": "24b4080d6333282e5f568646ceff561e542709fb7a88f0b426602e0d742e5907",
   "content_sha256": "ba3b2fab27a24bf66f27b37e71a9ce0e10c66a4cdfdaf765070bb2f20c13ad75",
   "artifact": "artifacts/rad750.npz",
-  "git_commit": "40bd4f04642fe60c3a07a89feb7bd00d29dc806e",
+  "git_commit": "5373badc053dac1eb4ed7dee7fc9b537680fb75c",
   "git_branch": "submission",
   "git_dirty": false,
   "kind": "training",
-  "created_utc": "2026-08-12T21:05:51Z",
-  "wall_clock_seconds": 16.787,
+  "created_utc": "2026-08-12T21:37:14Z",
+  "wall_clock_seconds": 14.907,
   "param_count": 399372,
   "flops_per_inference": 866432,
   "fits_compute_budget": true,
@@ -23,8 +23,8 @@
     "fits_compute_budget": true,
     "budget_utilisation": 0.1299648
   },
-  "peak_rss_bytes": 1620443136,
-  "peak_rss_mib": 1545.4,
+  "peak_rss_bytes": 1643511808,
+  "peak_rss_mib": 1567.4,
   "n_train_samples": 9302,
   "seed": 0,
   "environment": {
@@ -85,7 +85,7 @@
       "compression_ratio": 4.0,
       "budget_bits_per_window": 8000000
     },
-    "_source": "configs/tier_rad750.yaml"
+    "_source": "/Users/maksim/Desktop/novum/configs/tier_rad750.yaml"
   },
   "extra": {
     "train_split": "train_typical",

@@ -3,15 +3,15 @@
   "name": "snapdragon",
   "tier": "snapdragon",
   "model_type": "conv_ae_snapdragon",
-  "config_hash": "18ae461ec779d447ae9d45516b14a99318584bd5e6183000fe276864f2d96526",
-  "content_sha256": "f1e13711e8325dcfc78bc922d171e29b878be74784061a4fefb345650a0df125",
+  "config_hash": "1e26e2a863f78dc6e4ee508d1465af129c2da0be1dcd22f602cdde948b9d6e51",
+  "content_sha256": "7180b13811fd5f2a6db1d064915099be2c5b04d6da0840bc3d7a66a3871b20db",
   "artifact": "artifacts/snapdragon.npz",
-  "git_commit": "08bb4770ac43fa7fe365b24070bb560fb1dabd88",
-  "git_branch": "main",
+  "git_commit": "5373badc053dac1eb4ed7dee7fc9b537680fb75c",
+  "git_branch": "submission",
   "git_dirty": true,
   "kind": "evaluation",
-  "artifact_sha256": "90d5064e946ccbcd3caf15e10d86e8d2ff31fd7b3415761bf6d23b94726e0748",
-  "evaluated_utc": "2026-08-06T11:46:15Z",
+  "artifact_sha256": "f63fed83c632a649e9144abd6bc941a65b814bd899288aa84d2df750564a52cd",
+  "evaluated_utc": "2026-08-12T21:53:33Z",
   "typical_split": "test_typical",
   "novel_split": "test_novel_all",
   "window": {
@@ -25,19 +25,19 @@
     "window_frames": 162,
     "n_typical": 426,
     "n_novel": 430,
-    "roc_auc": 0.6525057320668195,
-    "average_precision": 0.6560772512479185,
+    "roc_auc": 0.6536521454307239,
+    "average_precision": 0.6576226384951239,
     "precision_at_k": {
       "10": 1.0,
       "25": 1.0,
-      "50": 0.84,
+      "50": 0.86,
       "100": 0.75,
       "162": 0.7160493827160493
     },
     "recall_at_k": {
       "10": 0.023255813953488372,
       "25": 0.05813953488372093,
-      "50": 0.09767441860465116,
+      "50": 0.1,
       "100": 0.1744186046511628,
       "162": 0.26976744186046514
     },
@@ -66,11 +66,11 @@
     },
     "natural": {
       "n": 169,
-      "roc_auc": 0.8880462260743951
+      "roc_auc": 0.8888379587187821
     },
     "rover": {
       "n": 261,
-      "roc_auc": 0.49999100606191427
+      "roc_auc": 0.501367078589031
     },
     "excluded": {
       "n": 0,
@@ -81,23 +81,23 @@
   "per_class_roc_auc": {
     "bedrock": {
       "n": 11,
-      "roc_auc": 0.8691848058045241
+      "roc_auc": 0.8711054204011951
     },
     "broken-rock": {
       "n": 76,
-      "roc_auc": 0.9249752903385223
+      "roc_auc": 0.9252841611069929
     },
     "drill-hole": {
       "n": 62,
-      "roc_auc": 0.5413069816749962
+      "roc_auc": 0.5426699984855369
     },
     "drt": {
       "n": 111,
-      "roc_auc": 0.4635410057945269
+      "roc_auc": 0.4650848031129721
     },
     "dump-pile": {
       "n": 93,
-      "roc_auc": 0.5144631228229593
+      "roc_auc": 0.5156242112171235
     },
     "edge_cases": {
       "n": 3,
@@ -105,23 +105,23 @@
     },
     "float": {
       "n": 18,
-      "roc_auc": 0.8819770474700053
+      "roc_auc": 0.8854981742305686
     },
     "meteorite": {
       "n": 34,
-      "roc_auc": 0.755868544600939
+      "roc_auc": 0.7563518365092516
     },
     "other": {
       "n": 1,
-      "roc_auc": 0.3615023474178404
+      "roc_auc": 0.3568075117370892
     },
     "scuff": {
       "n": 12,
-      "roc_auc": 0.7754303599374022
+      "roc_auc": 0.7767996870109546
     },
     "veins": {
       "n": 30,
-      "roc_auc": 0.9548513302034429
+      "roc_auc": 0.9551643192488263
     }
   },
   "reference": {
@@ -141,6 +141,6 @@
     "param_count": 2294871,
     "flops_per_inference": 49209344,
     "cycles_per_inference": 4920934.4,
-    "wall_clock_seconds": 481.539
+    "wall_clock_seconds": 515.758
   }
 }
