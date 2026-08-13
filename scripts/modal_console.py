@@ -42,6 +42,10 @@ VOLUME_MOUNT = Path("/vol")
 #: the one `make console` produces locally. It costs 136 MB and it buys the
 #: local and remote builds agreeing.
 UPLOAD_PATHS = (
+    # 872 MB, and only the training sweep needs it -- but without it
+    # `scripts.train` fails inside the container with a split it cannot open, so
+    # it is part of the volume rather than an optional extra.
+    ("data/processed/train_typical.npy", "processed/train_typical.npy"),
     ("data/processed/test_typical.npy", "processed/test_typical.npy"),
     ("data/processed/test_novel_all.npy", "processed/test_novel_all.npy"),
     ("data/processed/validation_typical.npy", "processed/validation_typical.npy"),
