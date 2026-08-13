@@ -727,7 +727,7 @@ downlink sits idle while the buffer fills and ages out.
 | | |
 |---|---|
 | default view | 94 of 169 natural frames delivered, **3.6×** FIFO at an identical bit budget |
-| snapdragon on RAD750 | one score costs 147,628,032 cycles; the window affords **0.56** — yield collapses to zero and the downlink sits idle |
+| snapdragon on RAD750 | one score costs 147,628,032<!--@RAD750HW_SNAPDRAGON_CYCLES--> cycles; the window affords **0.56** — yield collapses to zero and the downlink sits idle |
 | online adaptation | cold start visible as the curve climbing from zero; yield 46.2% against frozen's 55.6%<!--@NOVUM_YIELD-->, because frozen's training set spans sols the rover has not reached |
 | no API key | the brief renders from the deterministic template, badged `offline — template` |
 | API unreachable | the brief panel says so; every other panel is precomputed and unaffected |

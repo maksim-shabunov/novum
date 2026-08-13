@@ -3,15 +3,15 @@
   "name": "myriad",
   "tier": "myriad",
   "model_type": "conv_ae_myriad",
-  "config_hash": "705e0a05f5c71fbda951ea1c5f1c02fdcc55cc63f06aa361a8a1d1a55ee33260",
-  "content_sha256": "68a2ae0d5e7cf59aa52e6f1132533b318a2e23e52fe6bdd2c26a170f17022674",
-  "artifact": "artifacts/myriad.npz",
-  "git_commit": "5373badc053dac1eb4ed7dee7fc9b537680fb75c",
+  "config_hash": "65c586c3b4a1b8dee2be11f9918cb41d410890cf4fe7008d6465631a0eec9826",
+  "content_sha256": "be5d88168d5c08e5810e6d51a8d98374ed44379b3d16589182c228ab29a80050",
+  "artifact": "/tmp/artifacts/myriad.npz",
+  "git_commit": "5b589a70c04962d16a0e492ea3e72e522bbd42be",
   "git_branch": "submission",
   "git_dirty": false,
   "kind": "training",
-  "created_utc": "2026-08-12T21:39:34Z",
-  "wall_clock_seconds": 106.41,
+  "created_utc": "2026-08-13T10:16:43Z",
+  "wall_clock_seconds": 119.656,
   "param_count": 543797,
   "flops_per_inference": 9428992,
   "fits_compute_budget": true,
@@ -23,31 +23,31 @@
     "fits_compute_budget": true,
     "budget_utilisation": 0.02357248
   },
-  "peak_rss_bytes": 1799553024,
-  "peak_rss_mib": 1716.2,
+  "peak_rss_bytes": 2123026432,
+  "peak_rss_mib": 2024.7,
   "n_train_samples": 9302,
   "seed": 0,
   "training": {
     "epochs_run": 17,
     "best_epoch": 12,
-    "best_val_loss": 0.20403593190878042,
-    "final_train_loss": 0.15676937577314876,
+    "best_val_loss": 0.2040928069532577,
+    "final_train_loss": 0.15684713651367066,
     "early_stopped": true,
     "val_source": "validation_typical",
     "n_train_used": 9302,
-    "train_seconds": 105.1
+    "train_seconds": 110.84
   },
   "environment": {
-    "python": "3.13.12",
-    "numpy": "2.5.1",
-    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
-    "machine": "arm64",
-    "cpu_count": 14,
+    "python": "3.12.10",
+    "numpy": "2.5.2",
+    "platform": "Linux-4.19.0-gvisor-x86_64-with-glibc2.36",
+    "machine": "x86_64",
+    "cpu_count": 22,
     "device": "cpu",
-    "blas_backend": "accelerate",
-    "blas_threads": 14,
-    "torch": "2.9.1",
-    "torch_threads": 10
+    "blas_backend": "openblas",
+    "blas_threads": 6,
+    "torch": "2.13.0+cpu",
+    "torch_threads": 6
   },
   "config": {
     "tier": "myriad",
@@ -105,10 +105,10 @@
       "compression_ratio": 4.0,
       "budget_bits_per_window": 8000000
     },
-    "_source": "/Users/maksim/Desktop/novum/configs/tier_myriad.yaml"
+    "_source": "/app/configs/tier_myriad.yaml"
   },
   "extra": {
     "train_split": "train_typical",
-    "artifact_bytes": 2026032
+    "artifact_bytes": 2026058
   }
 }

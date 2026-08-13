@@ -3,15 +3,15 @@
   "name": "myriad",
   "tier": "myriad",
   "model_type": "conv_ae_myriad",
-  "config_hash": "705e0a05f5c71fbda951ea1c5f1c02fdcc55cc63f06aa361a8a1d1a55ee33260",
-  "content_sha256": "68a2ae0d5e7cf59aa52e6f1132533b318a2e23e52fe6bdd2c26a170f17022674",
-  "artifact": "artifacts/myriad.npz",
-  "git_commit": "5373badc053dac1eb4ed7dee7fc9b537680fb75c",
+  "config_hash": "65c586c3b4a1b8dee2be11f9918cb41d410890cf4fe7008d6465631a0eec9826",
+  "content_sha256": "be5d88168d5c08e5810e6d51a8d98374ed44379b3d16589182c228ab29a80050",
+  "artifact": "/tmp/artifacts/myriad.npz",
+  "git_commit": "5b589a70c04962d16a0e492ea3e72e522bbd42be",
   "git_branch": "submission",
   "git_dirty": false,
   "kind": "evaluation",
-  "artifact_sha256": "889f8d5300924aee332be1714f6232c0a54a14083ae26ac7b3c11a1d27df2af8",
-  "evaluated_utc": "2026-08-12T21:39:35Z",
+  "artifact_sha256": "1e2e0103c20ec2b2e129e4b2bfcf10c8a17e89ef2956e93f7d8b9aa0618b3641",
+  "evaluated_utc": "2026-08-13T10:16:48Z",
   "typical_split": "test_typical",
   "novel_split": "test_novel_all",
   "window": {
@@ -25,19 +25,19 @@
     "window_frames": 162,
     "n_typical": 426,
     "n_novel": 430,
-    "roc_auc": 0.6754067037886232,
-    "average_precision": 0.6627098515118999,
+    "roc_auc": 0.6751392073370456,
+    "average_precision": 0.6628768682623556,
     "precision_at_k": {
       "10": 0.9,
       "25": 0.8,
-      "50": 0.72,
+      "50": 0.74,
       "100": 0.72,
       "162": 0.7592592592592593
     },
     "recall_at_k": {
       "10": 0.020930232558139535,
       "25": 0.046511627906976744,
-      "50": 0.08372093023255814,
+      "50": 0.08604651162790698,
       "100": 0.16744186046511628,
       "162": 0.28604651162790695
     },
@@ -66,11 +66,11 @@
     },
     "natural": {
       "n": 169,
-      "roc_auc": 0.8857404783731978
+      "roc_auc": 0.8857265883268051
     },
     "rover": {
       "n": 261,
-      "roc_auc": 0.5392135700537838
+      "roc_auc": 0.5387818610256687
     },
     "excluded": {
       "n": 0,
@@ -78,52 +78,7 @@
       "label_counts": {}
     }
   },
-  "per_class_roc_auc": {
-    "bedrock": {
-      "n": 11,
-      "roc_auc": 0.8491250533504054
-    },
-    "broken-rock": {
-      "n": 76,
-      "roc_auc": 0.9114776377563627
-    },
-    "drill-hole": {
-      "n": 62,
-      "roc_auc": 0.6508026654550961
-    },
-    "drt": {
-      "n": 111,
-      "roc_auc": 0.4452057691494311
-    },
-    "dump-pile": {
-      "n": 93,
-      "roc_auc": 0.5774647887323944
-    },
-    "edge_cases": {
-      "n": 3,
-      "roc_auc": 0.6158059467918623
-    },
-    "float": {
-      "n": 18,
-      "roc_auc": 0.8794992175273866
-    },
-    "meteorite": {
-      "n": 34,
-      "roc_auc": 0.7961198563932615
-    },
-    "other": {
-      "n": 1,
-      "roc_auc": 0.25821596244131456
-    },
-    "scuff": {
-      "n": 12,
-      "roc_auc": 0.7609546165884195
-    },
-    "veins": {
-      "n": 30,
-      "roc_auc": 0.9392801251956181
-    }
-  },
+  "per_class_roc_auc": {},
   "reference": {
     "roc_auc": 0.65,
     "source": "Kerner et al. 2020, conv autoencoder on Mastcam novelty (ROC AUC 0.65)"
@@ -141,6 +96,6 @@
     "param_count": 543797,
     "flops_per_inference": 9428992,
     "cycles_per_inference": 2357248.0,
-    "wall_clock_seconds": 106.41
+    "wall_clock_seconds": 119.656
   }
 }

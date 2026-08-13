@@ -212,6 +212,23 @@ def _compute_figures(summary: dict, src: str) -> list[Figure]:
                         "novelty scores affordable per window on that processor",
                     )
                 )
+                # The console shows two decimals and the demo script reads that
+                # figure aloud; both forms need to be checkable.
+                out.append(
+                    Figure(
+                        f"RAD750HW_{tier.upper()}_SCORES_2DP",
+                        scores, f"{scores:.2f}", src,
+                    )
+                )
+            if entry.get("cycles_per_score"):
+                out.append(
+                    Figure(
+                        f"RAD750HW_{tier.upper()}_CYCLES",
+                        entry["cycles_per_score"],
+                        f"{entry['cycles_per_score']:,.0f}", src,
+                        f"cycles one {tier} novelty score costs on a RAD750",
+                    )
+                )
 
     # Scoring everything makes the PCA tier worse, which is the uncomfortable one.
     base = _run(summary, tier="rad750", method=HEADLINE_POLICY)

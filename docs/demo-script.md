@@ -64,9 +64,12 @@ about two seconds. Then back up to 25%. Then leave it at **15%**.
 > surprising quickly.
 >
 > At an identical bit budget: sending oldest-first delivers fifteen percent of
-> the natural science. This delivers fifty-five."
+> the natural science. This delivers fifty-five.
+>
+> *(live: FIFO **15.4%**<!--@FIFO_YIELD-->, NOVUM **55.6%**<!--@NOVUM_YIELD-->)*"
 
-**Must be visible:** the headline row throughout — `94/169`, `3.6×`, and the
+**Must be visible:** the headline row throughout — **94**<!--@NOVUM_NATURAL_SENT--> of
+**169**<!--@NATURAL_TOTAL--> natural frames, **3.6×**<!--@NOVUM_VS_FIFO_RATIO--> versus FIFO, and the
 *bits on rover hardware* figure falling as the budget tightens.
 
 **Do not linger on:** the individual thumbnails. Resist hovering; the tooltip is
@@ -89,15 +92,21 @@ screen updates.
 >
 > One novelty score on that processor costs a hundred and forty-seven million
 > cycles. The window budget affords zero point five six of them — less than one
-> frame. So it scores nothing, ranks nothing, and the downlink sits idle while
+> frame.
+>
+> So it scores nothing, ranks nothing, and the downlink sits idle while
 > the buffer fills and ages out.
+>
+> *(live figures on the banner: **147,628,032**<!--@RAD750HW_SNAPDRAGON_CYCLES-->
+> cycles per score, **0.56**<!--@RAD750HW_SNAPDRAGON_SCORES_2DP--> affordable)*
 >
 > This is the whole argument. Accuracy you cannot afford to compute is not
 > accuracy. Every paper that reports ROC AUC on a fixed test set and stops
 > cannot see this."
 
 **Must be visible:** the red alert banner — *"This model cannot run on this
-hardware"* — with the cycle cost and the 0.56 figure; the `0/169` headline; the
+hardware"* — showing **147,628,032**<!--@RAD750HW_SNAPDRAGON_CYCLES--> cycles
+per score and **0.56**<!--@RAD750HW_SNAPDRAGON_SCORES_2DP--> scores affordable; the `0/169` headline; the
 empty downlink panel reading *"Nothing was transmitted this window"*; and the
 window timeline strip turning entirely red for cycles-limited.
 
@@ -120,6 +129,8 @@ be compared directly.
 >
 > Watch the curve. It starts at zero and climbs. It reaches forty-six percent
 > against FIFO's fifteen — with no prior knowledge of the body it's looking at.
+>
+> *(live: online **0.462**<!--@ONLINE_YIELD-->, FIFO **0.154**<!--@FIFO_YIELD_DECIMAL-->)*
 >
 > A detector arriving somewhere nobody has been doesn't need to be told what's
 > interesting. It needs to learn what's ordinary. That's the curve."
